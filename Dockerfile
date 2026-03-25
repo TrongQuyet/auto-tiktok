@@ -6,8 +6,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg2 \
     unzip \
     ffmpeg \
+    libass-dev \
     fonts-liberation \
     fonts-noto-cjk \
+    fonts-noto \
     xvfb \
     x11vnc \
     novnc \

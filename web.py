@@ -6,7 +6,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -337,3 +337,115 @@ async def _run_upload(video_path: Path):
         logger.error(f"Upload error: {e}")
 
     await _broadcast({"type": "status", **batch_status})
+
+
+# ── Subtitle Feature ───────────────────────────────────────────────
+subtitle_status = {
+    "running": False,
+    "status": "idle",
+    "progress": 0,
+    "output_path": None,
+    "error": None,
+}
+
+
+@app.get("/api/subtitle/status")
+async def get_subtitle_status():
+    return subtitle_status
+
+
+@app.post("/api/subtitle")
+async def add_subtitle(
+    video: UploadFile = File(...),
+    source_lang: str = Form("zh"),
+    target_lang: str = Form("vi"),
+    font_size: int = Form(18),
+):
+    if subtitle_status["running"]:
+        return {"error": "A subtitle job is already running"}
+
+    # Save uploaded file
+    upload_dir = Path("temp/uploads")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    input_path = upload_dir / video.filename
+
+    with open(input_path, "wb") as f:
+        content = await video.read()
+        f.write(content)
+
+    logger.info(f"Uploaded video: {video.filename} ({len(content) / 1024 / 1024:.1f} MB)")
+
+    asyncio.create_task(_run_subtitle(input_path, source_lang, target_lang, font_size))
+    return {"message": "Subtitle job started", "filename": video.filename}
+
+
+@app.post("/api/subtitle/existing/{filename}")
+async def add_subtitle_existing(
+    filename: str,
+    source_lang: str = "zh",
+    target_lang: str = "vi",
+    font_size: int = 18,
+):
+    """Add subtitles to an existing video in output/"""
+    if subtitle_status["running"]:
+        return {"error": "A subtitle job is already running"}
+
+    path = Path("output") / filename
+    if not path.exists():
+        return {"error": "Video not found"}
+
+    asyncio.create_task(_run_subtitle(path, source_lang, target_lang, font_size))
+    return {"message": "Subtitle job started", "filename": filename}
+
+
+async def _run_subtitle(input_path: Path, source_lang: str, target_lang: str, font_size: int):
+    subtitle_status.update(running=True, status="Starting...", progress=0, output_path=None, error=None)
+    await _broadcast({"type": "subtitle_status", **subtitle_status})
+
+    try:
+        loop = asyncio.get_event_loop()
+
+        # Step 1: Transcribe
+        subtitle_status.update(status="Đang nhận diện giọng nói (Whisper)...", progress=20)
+        await _broadcast({"type": "subtitle_status", **subtitle_status})
+
+        from subtitle.transcriber import transcribe
+        segments = await loop.run_in_executor(None, transcribe, input_path, source_lang)
+        logger.info(f"Transcribed {len(segments)} segments")
+
+        # Step 2: Translate
+        subtitle_status.update(status=f"Đang dịch sang tiếng Việt ({len(segments)} đoạn)...", progress=50)
+        await _broadcast({"type": "subtitle_status", **subtitle_status})
+
+        from subtitle.translator import translate_segments
+        lang_map = {"zh": "zh-CN", "ja": "ja", "ko": "ko", "en": "en"}
+        src = lang_map.get(source_lang, source_lang)
+        translated = await loop.run_in_executor(None, translate_segments, segments, src, target_lang)
+
+        await _broadcast({
+            "type": "subtitle_preview",
+            "segments": [{"start": s["start"], "end": s["end"], "original": s.get("original", ""), "text": s["text"]} for s in translated],
+        })
+
+        # Step 3: Burn subtitles
+        subtitle_status.update(status="Đang chèn phụ đề vào video...", progress=75)
+        await _broadcast({"type": "subtitle_status", **subtitle_status})
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = Path("output") / f"sub_{timestamp}_{input_path.stem}.mp4"
+
+        from subtitle.burner import burn_subtitles
+        await loop.run_in_executor(None, burn_subtitles, input_path, translated, output_path, font_size)
+
+        subtitle_status.update(running=False, status="Hoàn thành!", progress=100, output_path=str(output_path))
+        logger.info(f"Subtitle done: {output_path}")
+
+    except Exception as e:
+        logger.error(f"Subtitle error: {e}")
+        subtitle_status.update(running=False, status=f"Lỗi: {e}", progress=0, error=str(e))
+
+    await _broadcast({"type": "subtitle_status", **subtitle_status})
+
+    # Cleanup uploaded file if it was in temp
+    if "temp/uploads" in str(input_path):
+        input_path.unlink(missing_ok=True)
