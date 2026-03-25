@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+output/*
+!output/.gitkeep
+temp/*
+!temp/.gitkeep
+chrome_profile/
+*.mp4
+*.mp3
+*.wav

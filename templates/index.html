@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto TikTok Video Generator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0f0f0f;
+            --surface: #1a1a2e;
+            --surface2: #16213e;
+            --accent: #e94560;
+            --accent2: #0f3460;
+            --text: #eee;
+            --text2: #aaa;
+            --success: #00c853;
+            --border: #2a2a4a;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── Header ─────────────────────────── */
+        .header {
+            background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+            padding: 20px 32px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .header h1 {
+            font-size: 22px;
+            font-weight: 700;
+        }
+        .header h1 span { color: var(--accent); }
+        .header .badge {
+            background: var(--accent);
+            color: #fff;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* ── Layout ─────────────────────────── */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 900px) {
+            .container { grid-template-columns: 1fr; }
+        }
+
+        /* ── Card ───────────────────────────── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-body { padding: 20px; }
+
+        /* ── Form ───────────────────────────── */
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: var(--text2);
+            font-weight: 500;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: var(--accent);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent);
+        }
+        .checkbox-group label {
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        /* ── Buttons ────────────────────────── */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+            width: 100%;
+            justify-content: center;
+        }
+        .btn-primary:hover { background: #d63451; }
+        .btn-primary:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .btn-sm {
+            padding: 6px 14px;
+            font-size: 12px;
+            border-radius: 6px;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-upload { background: var(--accent2); color: #fff; }
+        .btn-upload:hover { background: #1a4a8a; }
+
+        /* ── Progress ───────────────────────── */
+        .progress-container {
+            margin: 16px 0;
+        }
+        .progress-bar {
+            height: 6px;
+            background: var(--bg);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), #ff6b81);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+        .progress-text {
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--text2);
+        }
+
+        /* ── Log Console ────────────────────── */
+        .log-console {
+            background: #0a0a0a;
+            border-radius: 8px;
+            padding: 12px 16px;
+            height: 250px;
+            overflow-y: auto;
+            font-family: 'Cascadia Code', 'Fira Code', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #8f8;
+        }
+        .log-console .log-error { color: #f66; }
+        .log-console .log-warn { color: #fd0; }
+        .log-console .log-info { color: #8f8; }
+
+        /* ── Content Preview ────────────────── */
+        .content-preview {
+            display: none;
+            margin-top: 16px;
+        }
+        .content-preview.active { display: block; }
+        .content-preview h4 {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: var(--accent);
+        }
+        .segment {
+            background: var(--bg);
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 13px;
+            border-left: 3px solid var(--accent);
+        }
+        .hashtags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .hashtag {
+            background: var(--accent2);
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            color: #8af;
+        }
+
+        /* ── Video List ─────────────────────── */
+        .video-list { list-style: none; }
+        .video-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .video-item:last-child { border-bottom: none; }
+        .video-info h4 {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .video-info span {
+            font-size: 12px;
+            color: var(--text2);
+        }
+        .video-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        /* ── Video Player Modal ─────────────── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 400px;
+            width: 90%;
+            position: relative;
+        }
+        .modal-content video {
+            width: 100%;
+            border-radius: 8px;
+            max-height: 70vh;
+        }
+        .modal-close {
+            position: absolute;
+            top: -12px;
+            right: -12px;
+            background: var(--accent);
+            border: none;
+            color: #fff;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ── Status Indicator ───────────────── */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.idle { background: var(--text2); }
+        .status-dot.running { background: var(--accent); animation: pulse 1s infinite; }
+        .status-dot.done { background: var(--success); }
+        .status-dot.error { background: #f66; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text2);
+        }
+        .empty-state p { font-size: 14px; }
+
+        /* ── Right Column ───────────────────── */
+        .right-col { display: flex; flex-direction: column; gap: 24px; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1><span>Auto</span> TikTok Video Generator</h1>
+    <span class="badge" id="statusBadge">IDLE</span>
+</div>
+
+<div class="container">
+    <!-- LEFT COLUMN: Controls -->
+    <div class="left-col">
+        <div class="card">
+            <div class="card-header">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                Create New Video
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label>Niche / Topic</label>
+                    <input type="text" id="nicheInput" value="motivation" placeholder="e.g. motivation, fun facts, life tips">
+                </div>
+                <div class="form-group">
+                    <label>TTS Voice</label>
+                    <select id="voiceSelect">
+                        <option value="">Default (from .env)</option>
+                    </select>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="uploadCheck">
+                    <label for="uploadCheck">Upload to TikTok after generating</label>
+                </div>
+
+                <button class="btn btn-primary" id="generateBtn" onclick="startGenerate()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Generate Video
+                </button>
+
+                <!-- Progress -->
+                <div class="progress-container" id="progressArea" style="display:none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span class="status-dot running" id="statusDot"></span>
+                        <span id="statusText">Starting...</span>
+                    </div>
+                </div>
+
+                <!-- Content Preview -->
+                <div class="content-preview" id="contentPreview">
+                    <h4 id="contentTitle"></h4>
+                    <div id="segmentsList"></div>
+                    <p style="margin-top:10px; font-size:13px; color:var(--text2);" id="contentCaption"></p>
+                    <div class="hashtags" id="hashtagsList"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Video Library -->
+        <div class="card" style="margin-top: 24px;">
+            <div class="card-header">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M10 8l6 4-6 4V8z"/></svg>
+                Video Library
+                <button class="btn btn-sm btn-outline" onclick="loadVideos()" style="margin-left:auto;">Refresh</button>
+            </div>
+            <div class="card-body" id="videoListArea">
+                <div class="empty-state"><p>No videos yet. Generate one above!</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Logs -->
+    <div class="right-col">
+        <div class="card" style="flex:1;">
+            <div class="card-header">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                Live Logs
+                <button class="btn btn-sm btn-outline" onclick="clearLogs()" style="margin-left:auto;">Clear</button>
+            </div>
+            <div class="card-body">
+                <div class="log-console" id="logConsole">
+                    <div class="log-info">Waiting for connection...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Video Player Modal -->
+<div class="modal-overlay" id="videoModal">
+    <div class="modal-content">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <video id="videoPlayer" controls></video>
+    </div>
+</div>
+
+<script>
+    const logConsole = document.getElementById('logConsole');
+    const progressArea = document.getElementById('progressArea');
+    const progressFill = document.getElementById('progressFill');
+    const statusText = document.getElementById('statusText');
+    const statusDot = document.getElementById('statusDot');
+    const statusBadge = document.getElementById('statusBadge');
+    const generateBtn = document.getElementById('generateBtn');
+    const contentPreview = document.getElementById('contentPreview');
+
+    // ── WebSocket ──────────────────────────────────────────────────
+    let ws;
+    function connectWS() {
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+        ws.onopen = () => addLog('Connected to server', 'info');
+        ws.onclose = () => {
+            addLog('Disconnected. Reconnecting...', 'warn');
+            setTimeout(connectWS, 2000);
+        };
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+
+            if (data.type === 'log') {
+                const level = data.message.includes('[ERROR]') ? 'error'
+                    : data.message.includes('[WARNING]') ? 'warn' : 'info';
+                addLog(data.message, level);
+            }
+
+            if (data.type === 'status') {
+                updateStatus(data);
+            }
+
+            if (data.type === 'content') {
+                showContentPreview(data);
+            }
+        };
+    }
+
+    function addLog(msg, level = 'info') {
+        const div = document.createElement('div');
+        div.className = `log-${level}`;
+        div.textContent = msg;
+        logConsole.appendChild(div);
+        logConsole.scrollTop = logConsole.scrollHeight;
+    }
+
+    function clearLogs() {
+        logConsole.innerHTML = '';
+    }
+
+    // ── Status Updates ─────────────────────────────────────────────
+    function updateStatus(data) {
+        progressArea.style.display = 'block';
+        progressFill.style.width = data.progress + '%';
+        statusText.textContent = data.status;
+
+        if (data.running) {
+            statusDot.className = 'status-dot running';
+            statusBadge.textContent = 'RUNNING';
+            statusBadge.style.background = '#e94560';
+            generateBtn.disabled = true;
+        } else if (data.error) {
+            statusDot.className = 'status-dot error';
+            statusBadge.textContent = 'ERROR';
+            statusBadge.style.background = '#f66';
+            generateBtn.disabled = false;
+        } else {
+            statusDot.className = 'status-dot done';
+            statusBadge.textContent = 'DONE';
+            statusBadge.style.background = '#00c853';
+            generateBtn.disabled = false;
+            loadVideos();
+        }
+    }
+
+    // ── Content Preview ────────────────────────────────────────────
+    function showContentPreview(data) {
+        contentPreview.classList.add('active');
+        document.getElementById('contentTitle').textContent = data.title;
+        document.getElementById('contentCaption').textContent = data.caption;
+
+        const segList = document.getElementById('segmentsList');
+        segList.innerHTML = data.segments.map((s, i) =>
+            `<div class="segment"><strong>${i + 1}.</strong> ${s}</div>`
+        ).join('');
+
+        const tagList = document.getElementById('hashtagsList');
+        tagList.innerHTML = data.hashtags.map(h =>
+            `<span class="hashtag">${h}</span>`
+        ).join('');
+    }
+
+    // ── Generate ───────────────────────────────────────────────────
+    async function startGenerate() {
+        const niche = document.getElementById('nicheInput').value.trim();
+        if (!niche) return alert('Please enter a niche/topic');
+
+        const uploadToTiktok = document.getElementById('uploadCheck').checked;
+        const voice = document.getElementById('voiceSelect').value;
+
+        contentPreview.classList.remove('active');
+
+        const body = { niche, upload_to_tiktok: uploadToTiktok };
+        if (voice) body.tts_voice = voice;
+
+        const res = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert(data.error);
+        }
+    }
+
+    // ── Video Library ──────────────────────────────────────────────
+    async function loadVideos() {
+        const res = await fetch('/api/videos');
+        const videos = await res.json();
+        const area = document.getElementById('videoListArea');
+
+        if (!videos.length) {
+            area.innerHTML = '<div class="empty-state"><p>No videos yet. Generate one above!</p></div>';
+            return;
+        }
+
+        area.innerHTML = `<ul class="video-list">${videos.map(v => `
+            <li class="video-item">
+                <div class="video-info">
+                    <h4>${v.name}</h4>
+                    <span>${v.size_mb} MB &middot; ${v.created}</span>
+                </div>
+                <div class="video-actions">
+                    <button class="btn btn-sm btn-outline" onclick="playVideo('${v.url}')">Play</button>
+                    <a class="btn btn-sm btn-outline" href="${v.url}" download>Download</a>
+                    <button class="btn btn-sm btn-upload" onclick="uploadVideo('${v.name}')">Upload TikTok</button>
+                </div>
+            </li>
+        `).join('')}</ul>`;
+    }
+
+    function playVideo(url) {
+        const modal = document.getElementById('videoModal');
+        const player = document.getElementById('videoPlayer');
+        player.src = url;
+        modal.classList.add('active');
+    }
+
+    function closeModal() {
+        const modal = document.getElementById('videoModal');
+        const player = document.getElementById('videoPlayer');
+        player.pause();
+        player.src = '';
+        modal.classList.remove('active');
+    }
+
+    async function uploadVideo(filename) {
+        if (!confirm(`Upload "${filename}" to TikTok?`)) return;
+        const res = await fetch(`/api/upload/${filename}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.error) alert(data.error);
+    }
+
+    // ── Load Voices ────────────────────────────────────────────────
+    async function loadVoices() {
+        try {
+            const res = await fetch('/api/voices');
+            const voices = await res.json();
+            if (Array.isArray(voices)) {
+                const select = document.getElementById('voiceSelect');
+                voices.forEach(v => {
+                    const opt = document.createElement('option');
+                    opt.value = v.name;
+                    opt.textContent = `${v.name} (${v.gender}, ${v.locale})`;
+                    select.appendChild(opt);
+                });
+            }
+        } catch (e) {
+            console.error('Failed to load voices:', e);
+        }
+    }
+
+    // ── Init ───────────────────────────────────────────────────────
+    document.getElementById('videoModal').addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeModal();
+    });
+
+    connectWS();
+    loadVoices();
+    loadVideos();
+</script>
+</body>
+</html>

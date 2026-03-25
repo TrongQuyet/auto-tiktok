@@ -1,0 +1,14 @@
+services:
+  auto-tiktok:
+    build: .
+    container_name: auto-tiktok
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"  # Web UI
+      - "6080:6080"  # noVNC - browser view for TikTok login
+    volumes:
+      - ./output:/app/output
+      - ./chrome_profile:/app/chrome_profile
+    # Start web UI by default
+    command: ["web"]
