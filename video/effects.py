@@ -67,15 +67,25 @@ def _render_text_frame(text: str, width: int, height: int) -> np.ndarray:
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Try to use a nice font, fall back to default
+    # Try fonts that support Vietnamese diacritics
     font_size = 42
-    try:
-        font = ImageFont.truetype("arial.ttf", font_size)
-    except OSError:
+    font = None
+    font_candidates = [
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",  # Docker/Linux
+        "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf",              # Docker/Linux
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",           # Docker/Linux CJK
+        "C:/Windows/Fonts/arialbd.ttf",                                  # Windows
+        "C:/Windows/Fonts/arial.ttf",                                    # Windows
+        "arial.ttf",
+    ]
+    for font_path in font_candidates:
         try:
-            font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", font_size)
+            font = ImageFont.truetype(font_path, font_size)
+            break
         except OSError:
-            font = ImageFont.load_default()
+            continue
+    if font is None:
+        font = ImageFont.load_default()
 
     # Word wrap
     max_text_width = width - 100  # padding

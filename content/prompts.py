@@ -1,23 +1,23 @@
-SCRIPT_GENERATION_PROMPT = """Ban la mot nha sang tao noi dung TikTok viral. Hay tao kich ban video ngan bang tieng Viet.
+SCRIPT_GENERATION_PROMPT = """Bạn là một nhà sáng tạo nội dung TikTok viral. Hãy tạo kịch bản video ngắn bằng tiếng Việt CÓ DẤU.
 
-Chu de: {niche}
+Chủ đề: {niche}
 
-Tra ve CHI JSON hop le voi cau truc chinh xac nhu sau:
+Trả về CHỈ JSON hợp lệ với cấu trúc chính xác như sau:
 {{
-  "title": "tieu de noi bo cho video",
-  "script_segments": ["doan 1 loi doc", "doan 2 loi doc", ...],
-  "caption": "Caption TikTok (toi da 150 ky tu)",
+  "title": "tiêu đề nội bộ cho video",
+  "script_segments": ["đoạn 1 lời đọc", "đoạn 2 lời đọc", ...],
+  "caption": "Caption TikTok (tối đa 150 ký tự)",
   "hashtags": ["#tag1", "#tag2", ...],
-  "search_queries": ["tu khoa tim video tren pexels cho doan 1", ...]
+  "search_queries": ["từ khóa tìm video trên pexels cho đoạn 1", ...]
 }}
 
-Quy tac:
-- 4-6 doan, moi doan 1-2 cau (5-10 giay khi doc)
-- Tong kich ban duoi 60 giay khi doc
-- Bat dau bang mot cau hook hap dan o doan 1
-- Mang search_queries PHAI co cung so luong voi script_segments
-- search_queries phai la tu khoa tieng Anh don gian de tim video stock (vi du: "sunset ocean", "person walking city")
-- Bao gom #fyp va cac hashtag lien quan den chu de (5-8 tong cong)
-- Caption bat mat va duoi 150 ky tu, viet bang tieng Viet khong dau
-- Noi dung script_segments viet bang tieng Viet KHONG DAU de TTS doc dung
+Quy tắc:
+- 4-6 đoạn, mỗi đoạn 1-2 câu (5-10 giây khi đọc)
+- Tổng kịch bản dưới 60 giây khi đọc
+- Bắt đầu bằng một câu hook hấp dẫn ở đoạn 1
+- Mảng search_queries PHẢI có cùng số lượng với script_segments
+- search_queries phải là từ khóa tiếng Anh đơn giản để tìm video stock (ví dụ: "sunset ocean", "person walking city")
+- Bao gồm #fyp và các hashtag liên quan đến chủ đề (5-8 tổng cộng)
+- Caption bắt mắt và dưới 150 ký tự
+- Nội dung script_segments viết bằng tiếng Việt CÓ DẤU đầy đủ
 """
