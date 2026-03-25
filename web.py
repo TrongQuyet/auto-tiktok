@@ -22,9 +22,13 @@ app = FastAPI(title="Auto TikTok Video Generator")
 # Store connected WebSocket clients for real-time logs
 ws_clients: list[WebSocket] = []
 
-# Track current job status
-current_job = {
+# Track current batch job status
+batch_status = {
     "running": False,
+    "total": 0,
+    "completed": 0,
+    "failed": 0,
+    "current_video": 0,
     "status": "idle",
     "progress": 0,
     "video_path": None,
@@ -58,6 +62,14 @@ class GenerateRequest(BaseModel):
     tts_voice: str | None = None
 
 
+class BatchRequest(BaseModel):
+    niches: list[str] = ["motivation"]
+    count: int = 1
+    workers: int = 2
+    upload_to_tiktok: bool = False
+    tts_voice: str | None = None
+
+
 # ── API Endpoints ───────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def index():
@@ -66,7 +78,7 @@ async def index():
 
 @app.get("/api/status")
 async def get_status():
-    return current_job
+    return batch_status
 
 
 @app.get("/api/videos")
@@ -109,17 +121,50 @@ async def list_voices():
 
 @app.post("/api/generate")
 async def generate(req: GenerateRequest):
-    if current_job["running"]:
+    if batch_status["running"]:
         return {"error": "A job is already running"}
 
-    asyncio.create_task(_run_pipeline(req))
+    batch_req = BatchRequest(
+        niches=[req.niche],
+        count=1,
+        workers=1,
+        upload_to_tiktok=req.upload_to_tiktok,
+        tts_voice=req.tts_voice,
+    )
+    asyncio.create_task(_run_batch(batch_req))
     return {"message": "Job started", "niche": req.niche}
+
+
+@app.post("/api/batch")
+async def batch_generate(req: BatchRequest):
+    if batch_status["running"]:
+        return {"error": "A job is already running"}
+
+    req.count = min(req.count, 20)
+    req.workers = min(max(req.workers, 1), 4)
+
+    asyncio.create_task(_run_batch(req))
+    return {
+        "message": "Batch started",
+        "total": req.count,
+        "workers": req.workers,
+        "niches": req.niches,
+    }
+
+
+@app.post("/api/stop")
+async def stop_batch():
+    if not batch_status["running"]:
+        return {"error": "No job running"}
+    batch_status["running"] = False
+    logger.info("Stop requested by user")
+    return {"message": "Stopping..."}
 
 
 @app.post("/api/upload/{filename}")
 async def upload_to_tiktok(filename: str):
     """Upload an existing video to TikTok."""
-    if current_job["running"]:
+    if batch_status["running"]:
         return {"error": "A job is already running"}
 
     path = Path("output") / filename
@@ -150,75 +195,123 @@ async def _broadcast(data: dict):
             ws_clients.remove(ws)
 
 
-async def _run_pipeline(req: GenerateRequest):
-    current_job.update(running=True, status="starting", progress=0, video_path=None, error=None)
-    await _broadcast({"type": "status", **current_job})
+async def _create_single_video(video_num: int, niche: str, settings, tts_voice: str | None) -> Path | None:
+    """Create a single video. Returns output path or None on failure."""
+    if tts_voice:
+        settings.tts_voice = tts_voice
+
+    # Use unique temp dir per video to avoid conflicts in parallel mode
+    temp_dir = Path(f"temp/worker_{video_num}")
+    temp_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        settings = load_settings()
-        if req.tts_voice:
-            settings.tts_voice = req.tts_voice
-
-        # Clean temp
-        if settings.temp_dir.exists():
-            shutil.rmtree(settings.temp_dir)
-        settings.temp_dir.mkdir(parents=True, exist_ok=True)
-
         # Step 1: Generate content
-        current_job.update(status="Generating script with AI...", progress=10)
-        await _broadcast({"type": "status", **current_job})
-        content = await generate_content(req.niche, settings)
-        logger.info(f"Script: {content.title} ({len(content.script_segments)} segments)")
+        logger.info(f"[Video {video_num}] Generating script for '{niche}'...")
+        content = await generate_content(niche, settings)
+        logger.info(f"[Video {video_num}] Script: {content.title} ({len(content.script_segments)} segments)")
 
         await _broadcast({
             "type": "content",
+            "video_num": video_num,
             "title": content.title,
             "segments": content.script_segments,
             "caption": content.caption,
             "hashtags": content.hashtags,
         })
 
-        # Step 2: Download footage + TTS
-        current_job.update(status="Downloading footage & generating voiceover...", progress=30)
-        await _broadcast({"type": "status", **current_job})
-
+        # Step 2: Download footage + TTS in parallel
+        logger.info(f"[Video {video_num}] Downloading footage & generating voiceover...")
         loop = asyncio.get_event_loop()
         footage_task = loop.run_in_executor(
-            None, get_footage_for_segments, content.search_queries, settings.pexels_api_key, settings.temp_dir
+            None, get_footage_for_segments, content.search_queries, settings.pexels_api_key, temp_dir
         )
-        tts_task = generate_voiceover(content.script_segments, settings.tts_voice, settings.temp_dir)
+        tts_task = generate_voiceover(content.script_segments, settings.tts_voice, temp_dir)
         footage_paths, audio_paths = await asyncio.gather(footage_task, tts_task)
 
         # Step 3: Assemble video
-        current_job.update(status="Assembling video...", progress=60)
-        await _broadcast({"type": "status", **current_job})
+        logger.info(f"[Video {video_num}] Assembling video...")
         video_path = await loop.run_in_executor(
             None, assemble_video, content, footage_paths, audio_paths, settings
         )
-
-        current_job.update(status="Video created!", progress=90, video_path=str(video_path))
-        await _broadcast({"type": "status", **current_job})
-
-        # Step 4: Upload if requested
-        if req.upload_to_tiktok:
-            await _run_upload(video_path)
-        else:
-            current_job.update(status="Done!", progress=100, running=False)
-            await _broadcast({"type": "status", **current_job})
-
-        # Cleanup
-        shutil.rmtree(settings.temp_dir, ignore_errors=True)
-        settings.temp_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"[Video {video_num}] Done! -> {video_path}")
+        return video_path
 
     except Exception as e:
-        logger.error(f"Pipeline error: {e}")
-        current_job.update(status=f"Error: {e}", progress=0, running=False, error=str(e))
-        await _broadcast({"type": "status", **current_job})
+        logger.error(f"[Video {video_num}] Failed: {e}")
+        return None
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+async def _worker(semaphore: asyncio.Semaphore, video_num: int, niche: str, settings, req: BatchRequest):
+    """Worker that creates one video, respecting the concurrency semaphore."""
+    async with semaphore:
+        if not batch_status["running"]:
+            return
+
+        batch_status["current_video"] = video_num
+        batch_status["status"] = f"Creating video {video_num}/{batch_status['total']}..."
+        batch_status["progress"] = int((batch_status["completed"] / batch_status["total"]) * 100)
+        await _broadcast({"type": "status", **batch_status})
+
+        result = await _create_single_video(video_num, niche, settings, req.tts_voice)
+
+        if result:
+            batch_status["completed"] += 1
+            batch_status["video_path"] = str(result)
+
+            if req.upload_to_tiktok:
+                await _run_upload(result)
+        else:
+            batch_status["failed"] += 1
+
+        batch_status["progress"] = int((batch_status["completed"] + batch_status["failed"]) / batch_status["total"] * 100)
+        await _broadcast({"type": "status", **batch_status})
+
+
+async def _run_batch(req: BatchRequest):
+    total = req.count
+    batch_status.update(
+        running=True,
+        total=total,
+        completed=0,
+        failed=0,
+        current_video=0,
+        status=f"Starting batch: {total} videos, {req.workers} workers...",
+        progress=0,
+        video_path=None,
+        error=None,
+    )
+    await _broadcast({"type": "status", **batch_status})
+
+    settings = load_settings()
+    semaphore = asyncio.Semaphore(req.workers)
+
+    # Build list of (video_num, niche) pairs
+    # Cycle through provided niches
+    tasks = []
+    for i in range(total):
+        niche = req.niches[i % len(req.niches)]
+        video_num = i + 1
+        tasks.append(_worker(semaphore, video_num, niche, settings, req))
+
+    logger.info(f"Batch started: {total} videos, {req.workers} parallel workers")
+
+    # Run all workers (semaphore limits concurrency)
+    await asyncio.gather(*tasks)
+
+    batch_status.update(
+        running=False,
+        status=f"Batch complete! {batch_status['completed']} success, {batch_status['failed']} failed",
+        progress=100,
+    )
+    logger.info(f"Batch done: {batch_status['completed']}/{total} succeeded")
+    await _broadcast({"type": "status", **batch_status})
 
 
 async def _run_upload(video_path: Path):
-    current_job.update(running=True, status="Uploading to TikTok...", progress=95)
-    await _broadcast({"type": "status", **current_job})
+    batch_status.update(status=f"Uploading {video_path.name} to TikTok...")
+    await _broadcast({"type": "status", **batch_status})
 
     try:
         from uploader.tiktok import TikTokUploader
@@ -234,14 +327,13 @@ async def _run_upload(video_path: Path):
         try:
             success = await loop.run_in_executor(None, do_upload)
             if success:
-                current_job.update(status="Posted to TikTok!", progress=100, running=False)
+                logger.info(f"Uploaded {video_path.name} to TikTok!")
             else:
-                current_job.update(status="Upload failed", progress=0, running=False, error="Upload failed")
+                logger.error(f"Upload failed for {video_path.name}")
         finally:
             uploader.close()
 
     except Exception as e:
         logger.error(f"Upload error: {e}")
-        current_job.update(status=f"Upload error: {e}", progress=0, running=False, error=str(e))
 
-    await _broadcast({"type": "status", **current_job})
+    await _broadcast({"type": "status", **batch_status})

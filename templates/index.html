@@ -17,6 +17,7 @@
             --text2: #aaa;
             --success: #00c853;
             --border: #2a2a4a;
+            --warn: #ff9800;
         }
 
         body {
@@ -35,10 +36,7 @@
             align-items: center;
             gap: 16px;
         }
-        .header h1 {
-            font-size: 22px;
-            font-weight: 700;
-        }
+        .header h1 { font-size: 22px; font-weight: 700; }
         .header h1 span { color: var(--accent); }
         .header .badge {
             background: var(--accent);
@@ -55,13 +53,10 @@
             margin: 0 auto;
             padding: 24px;
             display: grid;
-            grid-template-columns: 380px 1fr;
+            grid-template-columns: 420px 1fr;
             gap: 24px;
         }
-
-        @media (max-width: 900px) {
-            .container { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
 
         /* ── Card ───────────────────────────── */
         .card {
@@ -81,10 +76,27 @@
         }
         .card-body { padding: 20px; }
 
-        /* ── Form ───────────────────────────── */
-        .form-group {
-            margin-bottom: 16px;
+        /* ── Tabs ───────────────────────────── */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
         }
+        .tab {
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            color: var(--text2);
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ── Form ───────────────────────────── */
+        .form-group { margin-bottom: 16px; }
         .form-group label {
             display: block;
             margin-bottom: 6px;
@@ -105,8 +117,12 @@
             transition: border-color 0.2s;
         }
         .form-group input:focus,
-        .form-group select:focus {
-            border-color: var(--accent);
+        .form-group select:focus { border-color: var(--accent); }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
         }
 
         .checkbox-group {
@@ -120,10 +136,7 @@
             height: 18px;
             accent-color: var(--accent);
         }
-        .checkbox-group label {
-            font-size: 14px;
-            cursor: pointer;
-        }
+        .checkbox-group label { font-size: 14px; cursor: pointer; }
 
         /* ── Buttons ────────────────────────── */
         .btn {
@@ -145,29 +158,27 @@
             justify-content: center;
         }
         .btn-primary:hover { background: #d63451; }
-        .btn-primary:disabled {
-            background: #555;
-            cursor: not-allowed;
+        .btn-primary:disabled { background: #555; cursor: not-allowed; }
+        .btn-stop {
+            background: var(--warn);
+            color: #000;
+            width: 100%;
+            justify-content: center;
+            margin-top: 8px;
         }
-        .btn-sm {
-            padding: 6px 14px;
-            font-size: 12px;
-            border-radius: 6px;
-        }
+        .btn-stop:hover { background: #e68a00; }
+        .btn-sm { padding: 6px 14px; font-size: 12px; border-radius: 6px; }
         .btn-outline {
             background: transparent;
             border: 1px solid var(--border);
             color: var(--text);
         }
         .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
-        .btn-success { background: var(--success); color: #fff; }
         .btn-upload { background: var(--accent2); color: #fff; }
         .btn-upload:hover { background: #1a4a8a; }
 
         /* ── Progress ───────────────────────── */
-        .progress-container {
-            margin: 16px 0;
-        }
+        .progress-container { margin: 16px 0; }
         .progress-bar {
             height: 6px;
             background: var(--bg);
@@ -185,14 +196,43 @@
             margin-top: 8px;
             font-size: 13px;
             color: var(--text2);
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
+
+        /* ── Batch Stats ────────────────────── */
+        .batch-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+        .stat-box {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+        .stat-box .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .stat-box .stat-label {
+            font-size: 11px;
+            color: var(--text2);
+            margin-top: 2px;
+        }
+        .stat-value.success { color: var(--success); }
+        .stat-value.failed { color: #f66; }
+        .stat-value.total { color: var(--accent); }
 
         /* ── Log Console ────────────────────── */
         .log-console {
             background: #0a0a0a;
             border-radius: 8px;
             padding: 12px 16px;
-            height: 250px;
+            height: 400px;
             overflow-y: auto;
             font-family: 'Cascadia Code', 'Fira Code', monospace;
             font-size: 12px;
@@ -204,16 +244,9 @@
         .log-console .log-info { color: #8f8; }
 
         /* ── Content Preview ────────────────── */
-        .content-preview {
-            display: none;
-            margin-top: 16px;
-        }
+        .content-preview { display: none; margin-top: 16px; }
         .content-preview.active { display: block; }
-        .content-preview h4 {
-            font-size: 14px;
-            margin-bottom: 8px;
-            color: var(--accent);
-        }
+        .content-preview h4 { font-size: 14px; margin-bottom: 8px; color: var(--accent); }
         .segment {
             background: var(--bg);
             padding: 8px 12px;
@@ -222,12 +255,7 @@
             font-size: 13px;
             border-left: 3px solid var(--accent);
         }
-        .hashtags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 8px;
-        }
+        .hashtags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
         .hashtag {
             background: var(--accent2);
             padding: 3px 10px;
@@ -246,18 +274,9 @@
             border-bottom: 1px solid var(--border);
         }
         .video-item:last-child { border-bottom: none; }
-        .video-info h4 {
-            font-size: 14px;
-            font-weight: 500;
-        }
-        .video-info span {
-            font-size: 12px;
-            color: var(--text2);
-        }
-        .video-actions {
-            display: flex;
-            gap: 6px;
-        }
+        .video-info h4 { font-size: 14px; font-weight: 500; }
+        .video-info span { font-size: 12px; color: var(--text2); }
+        .video-actions { display: flex; gap: 6px; }
 
         /* ── Video Player Modal ─────────────── */
         .modal-overlay {
@@ -278,11 +297,7 @@
             width: 90%;
             position: relative;
         }
-        .modal-content video {
-            width: 100%;
-            border-radius: 8px;
-            max-height: 70vh;
-        }
+        .modal-content video { width: 100%; border-radius: 8px; max-height: 70vh; }
         .modal-close {
             position: absolute;
             top: -12px;
@@ -301,30 +316,15 @@
         }
 
         /* ── Status Indicator ───────────────── */
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
         .status-dot.idle { background: var(--text2); }
         .status-dot.running { background: var(--accent); animation: pulse 1s infinite; }
         .status-dot.done { background: var(--success); }
         .status-dot.error { background: #f66; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--text2);
-        }
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--text2); }
         .empty-state p { font-size: 14px; }
-
-        /* ── Right Column ───────────────────── */
         .right-col { display: flex; flex-direction: column; gap: 24px; }
     </style>
 </head>
@@ -336,52 +336,109 @@
 </div>
 
 <div class="container">
-    <!-- LEFT COLUMN: Controls -->
+    <!-- LEFT COLUMN -->
     <div class="left-col">
         <div class="card">
-            <div class="card-header">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-                Create New Video
+            <!-- Tabs -->
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('single')">Single Video</div>
+                <div class="tab" onclick="switchTab('batch')">Batch Generate</div>
             </div>
-            <div class="card-body">
-                <div class="form-group">
-                    <label>Niche / Topic</label>
-                    <input type="text" id="nicheInput" value="motivation" placeholder="e.g. motivation, fun facts, life tips">
-                </div>
-                <div class="form-group">
-                    <label>TTS Voice</label>
-                    <select id="voiceSelect">
-                        <option value="">Default (from .env)</option>
-                    </select>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="uploadCheck">
-                    <label for="uploadCheck">Upload to TikTok after generating</label>
-                </div>
 
-                <button class="btn btn-primary" id="generateBtn" onclick="startGenerate()">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    Generate Video
+            <!-- Single Video Tab -->
+            <div class="tab-content active" id="tab-single">
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>Niche / Topic</label>
+                        <input type="text" id="nicheInput" value="motivation" placeholder="vd: motivation, fun facts, life tips">
+                    </div>
+                    <div class="form-group">
+                        <label>TTS Voice</label>
+                        <select id="voiceSelect">
+                            <option value="">Default (from .env)</option>
+                        </select>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="uploadCheck">
+                        <label for="uploadCheck">Upload to TikTok sau khi tạo</label>
+                    </div>
+                    <button class="btn btn-primary" id="generateBtn" onclick="startGenerate()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Tạo Video
+                    </button>
+                </div>
+            </div>
+
+            <!-- Batch Tab -->
+            <div class="tab-content" id="tab-batch">
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>Niches (mỗi dòng 1 niche, sẽ xoay vòng)</label>
+                        <textarea id="batchNiches" rows="3" style="width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;resize:vertical;outline:none;">motivation
+fun facts
+life tips</textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Số lượng video (1-20)</label>
+                            <input type="number" id="batchCount" value="5" min="1" max="20">
+                        </div>
+                        <div class="form-group">
+                            <label>Workers song song (1-4)</label>
+                            <input type="number" id="batchWorkers" value="2" min="1" max="4">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>TTS Voice</label>
+                        <select id="batchVoiceSelect">
+                            <option value="">Default (from .env)</option>
+                        </select>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="batchUploadCheck">
+                        <label for="batchUploadCheck">Upload to TikTok sau mỗi video</label>
+                    </div>
+                    <button class="btn btn-primary" id="batchBtn" onclick="startBatch()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                        Bắt đầu Batch
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress + Stats (shared) -->
+            <div class="card-body" id="progressArea" style="display:none; border-top: 1px solid var(--border);">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text">
+                    <span class="status-dot running" id="statusDot"></span>
+                    <span id="statusText">Starting...</span>
+                </div>
+                <div class="batch-stats" id="batchStats" style="display:none;">
+                    <div class="stat-box">
+                        <div class="stat-value success" id="statCompleted">0</div>
+                        <div class="stat-label">Xong</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value failed" id="statFailed">0</div>
+                        <div class="stat-label">Lỗi</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value total" id="statTotal">0</div>
+                        <div class="stat-label">Tổng</div>
+                    </div>
+                </div>
+                <button class="btn btn-stop" id="stopBtn" onclick="stopBatch()" style="display:none;">
+                    Dừng lại
                 </button>
+            </div>
 
-                <!-- Progress -->
-                <div class="progress-container" id="progressArea" style="display:none;">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
-                    <div class="progress-text">
-                        <span class="status-dot running" id="statusDot"></span>
-                        <span id="statusText">Starting...</span>
-                    </div>
-                </div>
-
-                <!-- Content Preview -->
-                <div class="content-preview" id="contentPreview">
-                    <h4 id="contentTitle"></h4>
-                    <div id="segmentsList"></div>
-                    <p style="margin-top:10px; font-size:13px; color:var(--text2);" id="contentCaption"></p>
-                    <div class="hashtags" id="hashtagsList"></div>
-                </div>
+            <!-- Content Preview -->
+            <div class="card-body content-preview" id="contentPreview" style="border-top: 1px solid var(--border);">
+                <h4 id="contentTitle"></h4>
+                <div id="segmentsList"></div>
+                <p style="margin-top:10px; font-size:13px; color:var(--text2);" id="contentCaption"></p>
+                <div class="hashtags" id="hashtagsList"></div>
             </div>
         </div>
 
@@ -393,7 +450,7 @@
                 <button class="btn btn-sm btn-outline" onclick="loadVideos()" style="margin-left:auto;">Refresh</button>
             </div>
             <div class="card-body" id="videoListArea">
-                <div class="empty-state"><p>No videos yet. Generate one above!</p></div>
+                <div class="empty-state"><p>Chưa có video. Tạo video ở trên!</p></div>
             </div>
         </div>
     </div>
@@ -431,14 +488,24 @@
     const statusDot = document.getElementById('statusDot');
     const statusBadge = document.getElementById('statusBadge');
     const generateBtn = document.getElementById('generateBtn');
+    const batchBtn = document.getElementById('batchBtn');
     const contentPreview = document.getElementById('contentPreview');
+    const batchStats = document.getElementById('batchStats');
+    const stopBtn = document.getElementById('stopBtn');
+
+    // ── Tabs ──────────────────────────────────────────────────────
+    function switchTab(tab) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.getElementById(`tab-${tab}`).classList.add('active');
+        document.querySelector(`.tab:nth-child(${tab === 'single' ? 1 : 2})`).classList.add('active');
+    }
 
     // ── WebSocket ──────────────────────────────────────────────────
     let ws;
     function connectWS() {
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
         ws = new WebSocket(`${protocol}//${location.host}/ws`);
-
         ws.onopen = () => addLog('Connected to server', 'info');
         ws.onclose = () => {
             addLog('Disconnected. Reconnecting...', 'warn');
@@ -446,20 +513,13 @@
         };
         ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
-
             if (data.type === 'log') {
                 const level = data.message.includes('[ERROR]') ? 'error'
                     : data.message.includes('[WARNING]') ? 'warn' : 'info';
                 addLog(data.message, level);
             }
-
-            if (data.type === 'status') {
-                updateStatus(data);
-            }
-
-            if (data.type === 'content') {
-                showContentPreview(data);
-            }
+            if (data.type === 'status') updateStatus(data);
+            if (data.type === 'content') showContentPreview(data);
         };
     }
 
@@ -471,9 +531,7 @@
         logConsole.scrollTop = logConsole.scrollHeight;
     }
 
-    function clearLogs() {
-        logConsole.innerHTML = '';
-    }
+    function clearLogs() { logConsole.innerHTML = ''; }
 
     // ── Status Updates ─────────────────────────────────────────────
     function updateStatus(data) {
@@ -481,21 +539,37 @@
         progressFill.style.width = data.progress + '%';
         statusText.textContent = data.status;
 
+        // Show batch stats if total > 1
+        if (data.total > 1) {
+            batchStats.style.display = 'grid';
+            document.getElementById('statCompleted').textContent = data.completed || 0;
+            document.getElementById('statFailed').textContent = data.failed || 0;
+            document.getElementById('statTotal').textContent = data.total || 0;
+        }
+
         if (data.running) {
             statusDot.className = 'status-dot running';
-            statusBadge.textContent = 'RUNNING';
+            statusBadge.textContent = data.total > 1
+                ? `BATCH ${data.completed || 0}/${data.total}`
+                : 'RUNNING';
             statusBadge.style.background = '#e94560';
             generateBtn.disabled = true;
+            batchBtn.disabled = true;
+            stopBtn.style.display = data.total > 1 ? 'flex' : 'none';
         } else if (data.error) {
             statusDot.className = 'status-dot error';
             statusBadge.textContent = 'ERROR';
             statusBadge.style.background = '#f66';
             generateBtn.disabled = false;
+            batchBtn.disabled = false;
+            stopBtn.style.display = 'none';
         } else {
             statusDot.className = 'status-dot done';
             statusBadge.textContent = 'DONE';
             statusBadge.style.background = '#00c853';
             generateBtn.disabled = false;
+            batchBtn.disabled = false;
+            stopBtn.style.display = 'none';
             loadVideos();
         }
     }
@@ -503,32 +577,31 @@
     // ── Content Preview ────────────────────────────────────────────
     function showContentPreview(data) {
         contentPreview.classList.add('active');
-        document.getElementById('contentTitle').textContent = data.title;
+        const prefix = data.video_num ? `[Video ${data.video_num}] ` : '';
+        document.getElementById('contentTitle').textContent = prefix + data.title;
         document.getElementById('contentCaption').textContent = data.caption;
-
-        const segList = document.getElementById('segmentsList');
-        segList.innerHTML = data.segments.map((s, i) =>
+        document.getElementById('segmentsList').innerHTML = data.segments.map((s, i) =>
             `<div class="segment"><strong>${i + 1}.</strong> ${s}</div>`
         ).join('');
-
-        const tagList = document.getElementById('hashtagsList');
-        tagList.innerHTML = data.hashtags.map(h =>
+        document.getElementById('hashtagsList').innerHTML = data.hashtags.map(h =>
             `<span class="hashtag">${h}</span>`
         ).join('');
     }
 
-    // ── Generate ───────────────────────────────────────────────────
+    // ── Single Generate ────────────────────────────────────────────
     async function startGenerate() {
         const niche = document.getElementById('nicheInput').value.trim();
-        if (!niche) return alert('Please enter a niche/topic');
+        if (!niche) return alert('Vui lòng nhập niche/topic');
 
-        const uploadToTiktok = document.getElementById('uploadCheck').checked;
+        const body = {
+            niche,
+            upload_to_tiktok: document.getElementById('uploadCheck').checked,
+        };
         const voice = document.getElementById('voiceSelect').value;
+        if (voice) body.tts_voice = voice;
 
         contentPreview.classList.remove('active');
-
-        const body = { niche, upload_to_tiktok: uploadToTiktok };
-        if (voice) body.tts_voice = voice;
+        batchStats.style.display = 'none';
 
         const res = await fetch('/api/generate', {
             method: 'POST',
@@ -536,9 +609,42 @@
             body: JSON.stringify(body),
         });
         const data = await res.json();
-        if (data.error) {
-            alert(data.error);
-        }
+        if (data.error) alert(data.error);
+    }
+
+    // ── Batch Generate ─────────────────────────────────────────────
+    async function startBatch() {
+        const nichesText = document.getElementById('batchNiches').value.trim();
+        if (!nichesText) return alert('Vui lòng nhập ít nhất 1 niche');
+
+        const niches = nichesText.split('\n').map(n => n.trim()).filter(n => n);
+        const count = parseInt(document.getElementById('batchCount').value) || 5;
+        const workers = parseInt(document.getElementById('batchWorkers').value) || 2;
+
+        const body = {
+            niches,
+            count: Math.min(Math.max(count, 1), 20),
+            workers: Math.min(Math.max(workers, 1), 4),
+            upload_to_tiktok: document.getElementById('batchUploadCheck').checked,
+        };
+        const voice = document.getElementById('batchVoiceSelect').value;
+        if (voice) body.tts_voice = voice;
+
+        contentPreview.classList.remove('active');
+
+        const res = await fetch('/api/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.error) alert(data.error);
+    }
+
+    // ── Stop Batch ─────────────────────────────────────────────────
+    async function stopBatch() {
+        if (!confirm('Dừng batch? Video đang tạo sẽ hoàn thành, nhưng video tiếp theo sẽ không bắt đầu.')) return;
+        await fetch('/api/stop', { method: 'POST' });
     }
 
     // ── Video Library ──────────────────────────────────────────────
@@ -548,7 +654,7 @@
         const area = document.getElementById('videoListArea');
 
         if (!videos.length) {
-            area.innerHTML = '<div class="empty-state"><p>No videos yet. Generate one above!</p></div>';
+            area.innerHTML = '<div class="empty-state"><p>Chưa có video. Tạo video ở trên!</p></div>';
             return;
         }
 
@@ -561,29 +667,23 @@
                 <div class="video-actions">
                     <button class="btn btn-sm btn-outline" onclick="playVideo('${v.url}')">Play</button>
                     <a class="btn btn-sm btn-outline" href="${v.url}" download>Download</a>
-                    <button class="btn btn-sm btn-upload" onclick="uploadVideo('${v.name}')">Upload TikTok</button>
+                    <button class="btn btn-sm btn-upload" onclick="uploadVideo('${v.name}')">TikTok</button>
                 </div>
             </li>
         `).join('')}</ul>`;
     }
 
     function playVideo(url) {
-        const modal = document.getElementById('videoModal');
-        const player = document.getElementById('videoPlayer');
-        player.src = url;
-        modal.classList.add('active');
+        document.getElementById('videoPlayer').src = url;
+        document.getElementById('videoModal').classList.add('active');
     }
-
     function closeModal() {
-        const modal = document.getElementById('videoModal');
         const player = document.getElementById('videoPlayer');
-        player.pause();
-        player.src = '';
-        modal.classList.remove('active');
+        player.pause(); player.src = '';
+        document.getElementById('videoModal').classList.remove('active');
     }
-
     async function uploadVideo(filename) {
-        if (!confirm(`Upload "${filename}" to TikTok?`)) return;
+        if (!confirm(`Upload "${filename}" lên TikTok?`)) return;
         const res = await fetch(`/api/upload/${filename}`, { method: 'POST' });
         const data = await res.json();
         if (data.error) alert(data.error);
@@ -595,24 +695,23 @@
             const res = await fetch('/api/voices');
             const voices = await res.json();
             if (Array.isArray(voices)) {
-                const select = document.getElementById('voiceSelect');
-                voices.forEach(v => {
-                    const opt = document.createElement('option');
-                    opt.value = v.name;
-                    opt.textContent = `${v.name} (${v.gender}, ${v.locale})`;
-                    select.appendChild(opt);
+                ['voiceSelect', 'batchVoiceSelect'].forEach(id => {
+                    const select = document.getElementById(id);
+                    voices.forEach(v => {
+                        const opt = document.createElement('option');
+                        opt.value = v.name;
+                        opt.textContent = `${v.name} (${v.gender}, ${v.locale})`;
+                        select.appendChild(opt);
+                    });
                 });
             }
-        } catch (e) {
-            console.error('Failed to load voices:', e);
-        }
+        } catch (e) { console.error('Failed to load voices:', e); }
     }
 
     // ── Init ───────────────────────────────────────────────────────
     document.getElementById('videoModal').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) closeModal();
     });
-
     connectWS();
     loadVoices();
     loadVideos();
