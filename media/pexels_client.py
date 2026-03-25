@@ -1,4 +1,5 @@
 import logging
+import random
 from pathlib import Path
 
 import requests
@@ -67,7 +68,7 @@ def get_footage_for_segments(search_queries: list[str], api_key: str, temp_dir: 
         if not videos:
             raise RuntimeError(f"No stock footage found for query: {query}")
 
-        video_url = _pick_best_file(videos[0])
+        video_url = _pick_best_file(random.choice(videos))
         if not video_url:
             raise RuntimeError(f"No downloadable file for query: {query}")
 
