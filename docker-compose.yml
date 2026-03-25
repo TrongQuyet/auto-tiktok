@@ -10,5 +10,7 @@ services:
     volumes:
       - ./output:/app/output
       - ./chrome_profile:/app/chrome_profile
+    mem_limit: 4g
+    memswap_limit: 6g
     # Start web UI by default
     command: ["web"]

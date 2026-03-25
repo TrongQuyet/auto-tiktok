@@ -429,6 +429,28 @@
                         <label>Cỡ chữ phụ đề</label>
                         <input type="number" id="subFontSize" value="18" min="12" max="36">
                     </div>
+
+                    <!-- Dubbing Options -->
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="enableDub">
+                        <label for="enableDub">Lồng tiếng Việt (Dubbing)</label>
+                    </div>
+                    <div id="dubOptions" style="display:none;">
+                        <div class="form-group">
+                            <label>Giọng lồng tiếng</label>
+                            <select id="dubVoiceSelect">
+                                <option value="vi-VN-NamMinhNeural">Nam Minh (Nam)</option>
+                                <option value="vi-VN-HoaiMyNeural">Hoài My (Nữ)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Âm lượng gốc (0 = tắt, 1 = giữ nguyên)</label>
+                            <input type="range" id="originalVolume" min="0" max="1" step="0.05" value="0.1"
+                                style="width:100%;accent-color:var(--accent);">
+                            <span style="font-size:12px;color:var(--text2);" id="volumeLabel">10%</span>
+                        </div>
+                    </div>
+
                     <button class="btn btn-primary" id="subtitleBtn" onclick="startSubtitle()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="14" x2="23" y2="14"/></svg>
                         Thêm Phụ Đề
@@ -820,6 +842,14 @@ life tips</textarea>
         });
     }
 
+    // Dubbing toggle
+    document.getElementById('enableDub').addEventListener('change', function() {
+        document.getElementById('dubOptions').style.display = this.checked ? 'block' : 'none';
+    });
+    document.getElementById('originalVolume').addEventListener('input', function() {
+        document.getElementById('volumeLabel').textContent = Math.round(this.value * 100) + '%';
+    });
+
     async function startSubtitle() {
         if (!selectedFile) return alert('Vui lòng chọn video trước');
 
@@ -828,6 +858,14 @@ life tips</textarea>
         formData.append('source_lang', document.getElementById('sourceLang').value);
         formData.append('target_lang', document.getElementById('targetLang').value);
         formData.append('font_size', document.getElementById('subFontSize').value);
+
+        // Dubbing options
+        const dubEnabled = document.getElementById('enableDub').checked;
+        formData.append('enable_dub', dubEnabled ? 'true' : 'false');
+        if (dubEnabled) {
+            formData.append('dub_voice', document.getElementById('dubVoiceSelect').value);
+            formData.append('original_volume', document.getElementById('originalVolume').value);
+        }
 
         document.getElementById('subtitleBtn').disabled = true;
         document.getElementById('subPreview').style.display = 'none';

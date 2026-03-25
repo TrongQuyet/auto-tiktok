@@ -35,17 +35,21 @@ def download_video(video_url: str, save_path: Path) -> Path:
 
 
 def _pick_best_file(video: dict) -> str | None:
-    """Pick the best video file URL (prefer HD, portrait)."""
+    """Pick video file 720p-1080p to save RAM. Avoid 2K/4K."""
     files = video.get("video_files", [])
-    # Sort by height descending, prefer HD
-    files_sorted = sorted(files, key=lambda f: f.get("height", 0), reverse=True)
-    for f in files_sorted:
-        if f.get("height", 0) >= 720:
-            return f["link"]
-    # Fallback to first available
-    if files_sorted:
-        return files_sorted[0]["link"]
-    return None
+    if not files:
+        return None
+    # Prefer 720-1080p range
+    preferred = [f for f in files if 720 <= f.get("height", 0) <= 1080]
+    if preferred:
+        preferred.sort(key=lambda f: f.get("height", 0), reverse=True)
+        return preferred[0]["link"]
+    # Fallback: smallest file >= 720p
+    hd = sorted([f for f in files if f.get("height", 0) >= 720], key=lambda f: f.get("height", 0))
+    if hd:
+        return hd[0]["link"]
+    # Last resort
+    return sorted(files, key=lambda f: f.get("height", 0), reverse=True)[0]["link"]
 
 
 def get_footage_for_segments(search_queries: list[str], api_key: str, temp_dir: Path) -> list[Path]:

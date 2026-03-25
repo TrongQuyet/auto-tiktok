@@ -39,25 +39,27 @@ def crop_to_vertical(clip, target_w=1080, target_h=1920):
 
 
 def apply_ken_burns(clip, zoom_factor=1.1):
-    """Slow zoom-in effect over the clip duration."""
+    """Slow zoom-in effect over the clip duration using cv2 (low memory)."""
+    import cv2
+
     w, h = clip.size
+    duration = max(clip.duration, 0.1)
 
     def zoom_effect(get_frame, t):
-        progress = t / max(clip.duration, 0.1)
+        progress = t / duration
         current_zoom = 1 + (zoom_factor - 1) * progress
 
         frame = get_frame(t)
-        img = Image.fromarray(frame)
 
-        # Calculate crop region for zoom
+        # Calculate crop region
         new_w = int(w / current_zoom)
         new_h = int(h / current_zoom)
         left = (w - new_w) // 2
         top = (h - new_h) // 2
 
-        cropped = img.crop((left, top, left + new_w, top + new_h))
-        resized = cropped.resize((w, h), Image.LANCZOS)
-        return np.array(resized)
+        # Numpy slice (zero-copy) + cv2 resize (faster than PIL, less memory)
+        cropped = frame[top:top + new_h, left:left + new_w]
+        return cv2.resize(cropped, (w, h), interpolation=cv2.INTER_LINEAR)
 
     return clip.fl(zoom_effect)
 

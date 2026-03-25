@@ -65,7 +65,7 @@ class GenerateRequest(BaseModel):
 class BatchRequest(BaseModel):
     niches: list[str] = ["motivation"]
     count: int = 1
-    workers: int = 2
+    workers: int = 1
     upload_to_tiktok: bool = False
     tts_voice: str | None = None
 
@@ -141,7 +141,7 @@ async def batch_generate(req: BatchRequest):
         return {"error": "A job is already running"}
 
     req.count = min(req.count, 20)
-    req.workers = min(max(req.workers, 1), 4)
+    req.workers = min(max(req.workers, 1), 2)
 
     asyncio.create_task(_run_batch(req))
     return {
@@ -360,6 +360,9 @@ async def add_subtitle(
     source_lang: str = Form("zh"),
     target_lang: str = Form("vi"),
     font_size: int = Form(18),
+    enable_dub: str = Form("false"),
+    dub_voice: str = Form("vi-VN-NamMinhNeural"),
+    original_volume: float = Form(0.1),
 ):
     if subtitle_status["running"]:
         return {"error": "A subtitle job is already running"}
@@ -375,8 +378,12 @@ async def add_subtitle(
 
     logger.info(f"Uploaded video: {video.filename} ({len(content) / 1024 / 1024:.1f} MB)")
 
-    asyncio.create_task(_run_subtitle(input_path, source_lang, target_lang, font_size))
-    return {"message": "Subtitle job started", "filename": video.filename}
+    dub = enable_dub.lower() in ("true", "1", "yes")
+    asyncio.create_task(_run_subtitle(
+        input_path, source_lang, target_lang, font_size,
+        dub=dub, dub_voice=dub_voice, original_volume=original_volume,
+    ))
+    return {"message": "Subtitle job started", "filename": video.filename, "dubbing": dub}
 
 
 @app.post("/api/subtitle/existing/{filename}")
@@ -398,7 +405,15 @@ async def add_subtitle_existing(
     return {"message": "Subtitle job started", "filename": filename}
 
 
-async def _run_subtitle(input_path: Path, source_lang: str, target_lang: str, font_size: int):
+async def _run_subtitle(
+    input_path: Path,
+    source_lang: str,
+    target_lang: str,
+    font_size: int,
+    dub: bool = False,
+    dub_voice: str = "vi-VN-NamMinhNeural",
+    original_volume: float = 0.1,
+):
     subtitle_status.update(running=True, status="Starting...", progress=0, output_path=None, error=None)
     await _broadcast({"type": "subtitle_status", **subtitle_status})
 
@@ -406,7 +421,7 @@ async def _run_subtitle(input_path: Path, source_lang: str, target_lang: str, fo
         loop = asyncio.get_event_loop()
 
         # Step 1: Transcribe
-        subtitle_status.update(status="Đang nhận diện giọng nói (Whisper)...", progress=20)
+        subtitle_status.update(status="Đang nhận diện giọng nói (Whisper)...", progress=15)
         await _broadcast({"type": "subtitle_status", **subtitle_status})
 
         from subtitle.transcriber import transcribe
@@ -414,7 +429,7 @@ async def _run_subtitle(input_path: Path, source_lang: str, target_lang: str, fo
         logger.info(f"Transcribed {len(segments)} segments")
 
         # Step 2: Translate
-        subtitle_status.update(status=f"Đang dịch sang tiếng Việt ({len(segments)} đoạn)...", progress=50)
+        subtitle_status.update(status=f"Đang dịch sang tiếng Việt ({len(segments)} đoạn)...", progress=35)
         await _broadcast({"type": "subtitle_status", **subtitle_status})
 
         from subtitle.translator import translate_segments
@@ -427,21 +442,44 @@ async def _run_subtitle(input_path: Path, source_lang: str, target_lang: str, fo
             "segments": [{"start": s["start"], "end": s["end"], "original": s.get("original", ""), "text": s["text"]} for s in translated],
         })
 
-        # Step 3: Burn subtitles
-        subtitle_status.update(status="Đang chèn phụ đề vào video...", progress=75)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        video_for_subtitle = input_path
+
+        # Step 3 (optional): Dubbing - generate Vietnamese voiceover
+        if dub:
+            subtitle_status.update(status=f"Đang lồng tiếng ({len(translated)} đoạn)...", progress=50)
+            await _broadcast({"type": "subtitle_status", **subtitle_status})
+
+            from subtitle.dubber import dub_video
+            dubbed_path = Path("output") / f"dub_{timestamp}_{input_path.stem}.mp4"
+            temp_dir = Path("temp") / f"dub_{timestamp}"
+            await dub_video(
+                input_path, translated, dub_voice, dubbed_path,
+                original_volume=original_volume, temp_dir=temp_dir,
+            )
+            video_for_subtitle = dubbed_path
+            logger.info(f"Dubbing done: {dubbed_path}")
+
+        # Step 4: Burn subtitles
+        subtitle_status.update(status="Đang chèn phụ đề vào video...", progress=80)
         await _broadcast({"type": "subtitle_status", **subtitle_status})
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = Path("output") / f"sub_{timestamp}_{input_path.stem}.mp4"
+        if dub:
+            output_path = Path("output") / f"dubbed_{timestamp}_{input_path.stem}.mp4"
 
         from subtitle.burner import burn_subtitles
-        await loop.run_in_executor(None, burn_subtitles, input_path, translated, output_path, font_size)
+        await loop.run_in_executor(None, burn_subtitles, video_for_subtitle, translated, output_path, font_size)
+
+        # Clean up intermediate dubbed file if subtitle was also burned
+        if dub and video_for_subtitle != input_path and video_for_subtitle != output_path:
+            video_for_subtitle.unlink(missing_ok=True)
 
         subtitle_status.update(running=False, status="Hoàn thành!", progress=100, output_path=str(output_path))
-        logger.info(f"Subtitle done: {output_path}")
+        logger.info(f"Done: {output_path}")
 
     except Exception as e:
-        logger.error(f"Subtitle error: {e}")
+        logger.error(f"Subtitle/dub error: {e}")
         subtitle_status.update(running=False, status=f"Lỗi: {e}", progress=0, error=str(e))
 
     await _broadcast({"type": "subtitle_status", **subtitle_status})
