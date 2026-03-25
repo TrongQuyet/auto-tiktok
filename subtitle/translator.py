@@ -35,10 +35,11 @@ def _translate_with_ai(segments: list[dict], source: str, target: str) -> list[s
 
     try:
         if gemini_key:
-            import google.generativeai as genai
-            genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            response = model.generate_content(prompt)
+            from google import genai
+            client = genai.Client(api_key=gemini_key)
+            response = client.models.generate_content(
+                model="gemini-2.0-flash", contents=prompt,
+            )
             result_text = response.text
         elif openai_key:
             from openai import OpenAI

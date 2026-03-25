@@ -22,13 +22,13 @@ def _extract_audio(video_path: Path, output_path: Path) -> Path:
 
 def _transcribe_gemini(audio_path: Path, language: str) -> list[dict]:
     """Transcribe audio using Gemini 2.0 Flash."""
-    import google.generativeai as genai
+    from google import genai
 
     api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is required for transcription")
 
-    genai.configure(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 
     lang_names = {
         "zh": "Chinese", "ja": "Japanese",
@@ -49,14 +49,15 @@ def _transcribe_gemini(audio_path: Path, language: str) -> list[dict]:
     )
 
     logger.info("Uploading audio to Gemini...")
-    audio_file = genai.upload_file(str(audio_path))
+    audio_file = client.files.upload(file=str(audio_path))
 
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content([prompt, audio_file])
+    response = client.models.generate_content(
+        model="gemini-2.0-flash", contents=[prompt, audio_file],
+    )
 
     # Clean up uploaded file
     try:
-        audio_file.delete()
+        client.files.delete(name=audio_file.name)
     except Exception:
         pass
 
