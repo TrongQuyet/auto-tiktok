@@ -209,23 +209,64 @@ async def websocket_endpoint(ws: WebSocket):
 
 # ── Helpers ─────────────────────────────────────────────────────────
 def _generate_search_queries(segments: list[str]) -> list[str]:
-    """Generate English Pexels search queries from Vietnamese segments."""
+    """Generate focused English Pexels search queries from Vietnamese segments."""
     try:
         from deep_translator import GoogleTranslator
         translator = GoogleTranslator(source="vi", target="en")
+
+        # Step 1: Detect main subject from all segments
+        # Translate first segment to find the main topic
+        first_en = translator.translate(segments[0][:100]) or ""
+        # Common nouns that are likely the main subject
+        nouns = {"dog", "cat", "fish", "bird", "horse", "elephant", "lion", "tiger",
+                 "bear", "monkey", "dolphin", "whale", "shark", "snake", "rabbit",
+                 "ocean", "space", "earth", "sun", "moon", "star", "mountain",
+                 "forest", "river", "city", "car", "phone", "computer", "brain",
+                 "heart", "eye", "food", "baby", "child", "tree", "flower"}
+        main_subject = ""
+        for word in first_en.lower().split():
+            clean = word.strip(".,!?()\"'")
+            if clean in nouns:
+                main_subject = clean
+                break
+
+        # Step 2: Generate query for each segment
+        skip_words = {
+            "the", "a", "an", "is", "are", "was", "were", "of", "to", "in",
+            "and", "that", "it", "for", "you", "do", "did", "can", "not",
+            "this", "but", "they", "have", "has", "with", "from", "be",
+            "been", "being", "will", "would", "could", "should", "may",
+            "might", "must", "shall", "about", "also", "just", "like",
+            "know", "than", "then", "only", "very", "much", "many",
+            "some", "any", "all", "most", "other", "more", "less", "each",
+            "every", "both", "few", "how", "what", "when", "where", "why",
+            "who", "which", "their", "there", "here", "your", "our", "its",
+        }
+
         queries = []
         for seg in segments:
-            # Translate to English, take key phrase
             en = translator.translate(seg[:100])
-            if en:
-                # Extract 2-4 important words (skip common words)
-                skip = {"the", "a", "an", "is", "are", "was", "were", "of", "to", "in", "and", "that", "it", "for", "you", "do", "did", "can", "not", "this", "but", "they", "have", "has", "with", "from"}
-                words = [w for w in en.split() if w.lower() not in skip and len(w) > 2]
-                query = " ".join(words[:3]) if words else "nature"
-                queries.append(query)
-            else:
-                queries.append("nature landscape")
-        logger.info(f"Search queries: {queries}")
+            if not en:
+                queries.append(main_subject or "nature")
+                continue
+
+            # Extract meaningful words (nouns, adjectives)
+            words = []
+            for w in en.split():
+                clean = w.strip(".,!?()\"'").lower()
+                if clean not in skip_words and len(clean) > 2 and not clean.isdigit():
+                    words.append(clean)
+
+            # Build query: main subject + 1-2 context words
+            query_parts = []
+            if main_subject and main_subject not in words:
+                query_parts.append(main_subject)
+            query_parts.extend(words[:2])
+
+            query = " ".join(query_parts[:3]) if query_parts else (main_subject or "nature")
+            queries.append(query)
+
+        logger.info(f"Search queries (subject='{main_subject}'): {queries}")
         return queries
     except Exception as e:
         logger.warning(f"Translation failed for search queries: {e}")

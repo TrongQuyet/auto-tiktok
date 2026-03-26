@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=30))
-def search_videos(query: str, api_key: str, orientation: str = "portrait", per_page: int = 5) -> list[dict]:
+def search_videos(query: str, api_key: str, orientation: str = "portrait", per_page: int = 15) -> list[dict]:
     url = "https://api.pexels.com/videos/search"
     headers = {"Authorization": api_key}
     params = {
@@ -68,7 +68,16 @@ def get_footage_for_segments(search_queries: list[str], api_key: str, temp_dir: 
         if not videos:
             raise RuntimeError(f"No stock footage found for query: {query}")
 
-        video_url = _pick_best_file(random.choice(videos))
+        # Pick a video with decent duration (>3s), prefer top results (more relevant)
+        chosen = None
+        for v in videos[:8]:
+            if v.get("duration", 0) >= 3:
+                chosen = v
+                break
+        if not chosen:
+            chosen = videos[0]
+
+        video_url = _pick_best_file(chosen)
         if not video_url:
             raise RuntimeError(f"No downloadable file for query: {query}")
 
