@@ -67,10 +67,12 @@ class GenerateRequest(BaseModel):
     bgm_style: str = "none"
     sfx_enabled: bool = False
     video_provider: str = "pexels"
-    mode: str = "niche"
+    mode: str = "niche"  # "niche", "prompt", "crawl"
     segments: list[str] | None = None
     caption: str | None = None
     hashtags: list[str] | None = None
+    crawl_source: str = "reddit"  # "reddit" or "wikipedia"
+    crawl_topic: str = "todayilearned"
 
 
 class BatchRequest(BaseModel):
@@ -154,6 +156,10 @@ async def generate(req: GenerateRequest):
     if req.mode == "prompt" and req.segments:
         asyncio.create_task(_run_prompt_video(req))
         return {"message": "Prompt video started", "segments": len(req.segments)}
+
+    if req.mode == "crawl":
+        asyncio.create_task(_run_crawl_video(req))
+        return {"message": "Crawl video started", "source": req.crawl_source, "topic": req.crawl_topic}
 
     batch_req = BatchRequest(
         niches=[req.niche],
@@ -396,6 +402,73 @@ async def _run_prompt_video(req: GenerateRequest):
 
     except Exception as e:
         logger.error(f"Prompt video error: {e}")
+        batch_status.update(running=False, status=f"Error: {e}", progress=0, error=str(e))
+        await _broadcast({"type": "status", **batch_status})
+
+
+async def _run_crawl_video(req: GenerateRequest):
+    """Crawl content from Reddit/Wikipedia, translate, then create video."""
+    batch_status.update(
+        running=True, total=1, completed=0, failed=0, current_video=1,
+        status=f"Crawling {req.crawl_source}: {req.crawl_topic}...", progress=0, video_path=None, error=None,
+    )
+    await _broadcast({"type": "status", **batch_status})
+
+    try:
+        settings = load_settings()
+        if req.tts_voice:
+            settings.tts_voice = req.tts_voice
+
+        temp_dir = Path("temp/crawl_video")
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        # Step 1: Crawl + translate
+        batch_status.update(status=f"Crawling {req.crawl_source}...", progress=10)
+        await _broadcast({"type": "status", **batch_status})
+
+        loop = asyncio.get_event_loop()
+        from content.crawler import crawl_and_generate
+        content = await loop.run_in_executor(None, crawl_and_generate, req.crawl_source, req.crawl_topic, 5)
+
+        await _broadcast({
+            "type": "content",
+            "video_num": 1,
+            "title": content.title,
+            "segments": content.script_segments,
+            "caption": content.caption,
+            "hashtags": content.hashtags,
+        })
+
+        # Step 2: Download footage + TTS
+        batch_status.update(status="Downloading footage & generating voiceover...", progress=30)
+        await _broadcast({"type": "status", **batch_status})
+
+        footage_task = loop.run_in_executor(
+            None, _get_footage, content.search_queries, settings, req.video_provider, temp_dir
+        )
+        tts_task = generate_voiceover(content.script_segments, settings.tts_voice, temp_dir, rate=req.tts_rate)
+        footage_paths, (audio_paths, word_timings) = await asyncio.gather(footage_task, tts_task)
+
+        # Step 3: Assemble
+        batch_status.update(status="Assembling video...", progress=60)
+        await _broadcast({"type": "status", **batch_status})
+        video_path = await loop.run_in_executor(
+            None, assemble_video, content, footage_paths, audio_paths, settings,
+            req.subtitle_style, word_timings, req.transition, req.bgm_style, req.sfx_enabled,
+        )
+
+        batch_status.update(completed=1, video_path=str(video_path))
+
+        if req.upload_to_tiktok:
+            await _run_upload(video_path)
+
+        batch_status.update(running=False, status="Done!", progress=100)
+        await _broadcast({"type": "status", **batch_status})
+
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+    except Exception as e:
+        logger.error(f"Crawl video error: {e}")
         batch_status.update(running=False, status=f"Error: {e}", progress=0, error=str(e))
         await _broadcast({"type": "status", **batch_status})
 

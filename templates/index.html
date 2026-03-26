@@ -396,8 +396,9 @@
                 <div class="card-body">
                     <!-- Mode Toggle -->
                     <div style="display:flex; gap:8px; margin-bottom:16px;">
-                        <button class="btn btn-sm" id="modeNiche" onclick="setMode('niche')" style="flex:1; background:var(--accent); color:#fff;">Niche / Topic</button>
-                        <button class="btn btn-sm btn-outline" id="modePrompt" onclick="setMode('prompt')" style="flex:1;">Custom Prompt</button>
+                        <button class="btn btn-sm" id="modeNiche" onclick="setMode('niche')" style="flex:1; background:var(--accent); color:#fff;">Niche</button>
+                        <button class="btn btn-sm btn-outline" id="modePrompt" onclick="setMode('prompt')" style="flex:1;">Prompt</button>
+                        <button class="btn btn-sm btn-outline" id="modeCrawl" onclick="setMode('crawl')" style="flex:1;">Crawl Web</button>
                     </div>
 
                     <!-- Niche Mode -->
@@ -421,6 +422,28 @@
                         <div class="form-group">
                             <label>Hashtags (cách nhau bởi dấu cách)</label>
                             <input type="text" id="promptHashtags" placeholder="#fyp #viral #trending" value="#fyp #viral #trending">
+                        </div>
+                    </div>
+
+                    <!-- Crawl Mode -->
+                    <div id="crawlMode" style="display:none;">
+                        <div class="form-group">
+                            <label>Nguồn</label>
+                            <select id="crawlSource" onchange="updateCrawlTopic()">
+                                <option value="reddit">Reddit</option>
+                                <option value="wikipedia">Wikipedia</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label id="crawlTopicLabel">Subreddit</label>
+                            <input type="text" id="crawlTopic" value="todayilearned" placeholder="todayilearned">
+                            <div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap;" id="crawlSuggestions">
+                                <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('todayilearned')">TIL</button>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('Showerthoughts')">Thoughts</button>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('funfacts')">Fun Facts</button>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('AnimalFacts')">Animals</button>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('spacefacts')">Space</button>
+                            </div>
                         </div>
                     </div>
 
@@ -852,12 +875,36 @@ life tips</textarea>
         currentMode = mode;
         document.getElementById('nicheMode').style.display = mode === 'niche' ? 'block' : 'none';
         document.getElementById('promptMode').style.display = mode === 'prompt' ? 'block' : 'none';
-        document.getElementById('modeNiche').className = mode === 'niche' ? 'btn btn-sm' : 'btn btn-sm btn-outline';
-        document.getElementById('modePrompt').className = mode === 'prompt' ? 'btn btn-sm' : 'btn btn-sm btn-outline';
-        document.getElementById('modeNiche').style.background = mode === 'niche' ? 'var(--accent)' : '';
-        document.getElementById('modeNiche').style.color = mode === 'niche' ? '#fff' : '';
-        document.getElementById('modePrompt').style.background = mode === 'prompt' ? 'var(--accent)' : '';
-        document.getElementById('modePrompt').style.color = mode === 'prompt' ? '#fff' : '';
+        document.getElementById('crawlMode').style.display = mode === 'crawl' ? 'block' : 'none';
+        ['modeNiche', 'modePrompt', 'modeCrawl'].forEach(id => {
+            const btn = document.getElementById(id);
+            const active = id === 'mode' + mode.charAt(0).toUpperCase() + mode.slice(1);
+            btn.className = active ? 'btn btn-sm' : 'btn btn-sm btn-outline';
+            btn.style.background = active ? 'var(--accent)' : '';
+            btn.style.color = active ? '#fff' : '';
+        });
+    }
+
+    function updateCrawlTopic() {
+        const source = document.getElementById('crawlSource').value;
+        const label = document.getElementById('crawlTopicLabel');
+        const input = document.getElementById('crawlTopic');
+        const suggestions = document.getElementById('crawlSuggestions');
+        if (source === 'reddit') {
+            label.textContent = 'Subreddit';
+            input.placeholder = 'todayilearned';
+            input.value = 'todayilearned';
+            suggestions.style.display = 'flex';
+        } else {
+            label.textContent = 'Wikipedia topic (tiếng Anh)';
+            input.placeholder = 'Dogs, Earth, Space...';
+            input.value = '';
+            suggestions.style.display = 'none';
+        }
+    }
+
+    function setCrawlTopic(topic) {
+        document.getElementById('crawlTopic').value = topic;
     }
 
     // ── Single Generate ────────────────────────────────────────────
@@ -873,7 +920,27 @@ life tips</textarea>
         const subtitleStyle = document.getElementById('subtitleStyle').value;
         const ttsRate = document.getElementById('ttsRate').value;
 
-        if (currentMode === 'prompt') {
+        // Common options
+        const commonOpts = {
+            upload_to_tiktok: uploadToTiktok,
+            subtitle_style: subtitleStyle,
+            tts_rate: ttsRate,
+            transition: document.getElementById('transition').value,
+            bgm_style: document.getElementById('bgmStyle').value,
+            sfx_enabled: document.getElementById('sfxEnabled').checked,
+            video_provider: document.getElementById('videoProvider').value,
+        };
+
+        if (currentMode === 'crawl') {
+            const crawlTopic = document.getElementById('crawlTopic').value.trim();
+            if (!crawlTopic) return alert('Vui lòng nhập subreddit hoặc topic');
+            body = {
+                mode: 'crawl',
+                crawl_source: document.getElementById('crawlSource').value,
+                crawl_topic: crawlTopic,
+                ...commonOpts,
+            };
+        } else if (currentMode === 'prompt') {
             const promptText = document.getElementById('promptInput').value.trim();
             if (!promptText) return alert('Vui lòng nhập kịch bản video');
 
@@ -886,29 +953,15 @@ life tips</textarea>
 
             body = {
                 mode: 'prompt',
-                segments: segments,
-                caption: caption,
-                hashtags: hashtags,
-                upload_to_tiktok: uploadToTiktok,
-                subtitle_style: subtitleStyle,
-                tts_rate: ttsRate,
-                transition: document.getElementById('transition').value,
-                bgm_style: document.getElementById('bgmStyle').value,
-                sfx_enabled: document.getElementById('sfxEnabled').checked,
-                video_provider: document.getElementById('videoProvider').value,
+                segments, caption, hashtags,
+                ...commonOpts,
             };
         } else {
             const niche = document.getElementById('nicheInput').value.trim();
             if (!niche) return alert('Vui lòng nhập niche/topic');
             body = {
-                niche: niche,
-                upload_to_tiktok: uploadToTiktok,
-                subtitle_style: subtitleStyle,
-                tts_rate: ttsRate,
-                transition: document.getElementById('transition').value,
-                bgm_style: document.getElementById('bgmStyle').value,
-                sfx_enabled: document.getElementById('sfxEnabled').checked,
-                video_provider: document.getElementById('videoProvider').value,
+                niche,
+                ...commonOpts,
             };
         }
 
