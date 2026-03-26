@@ -18,6 +18,13 @@ SUBREDDIT_MAP = {
     "animalfacts": "Animal Facts",
     "spacefacts": "Space Facts",
     "historyfacts": "History Facts",
+    # Funny/Meme
+    "Jokes": "Jokes",
+    "dadjokes": "Dad Jokes",
+    "AnimalsBeingDerps": "Animals Being Derps",
+    "AnimalsBeingJerks": "Animals Being Jerks",
+    "aww": "Cute Animals",
+    "meirl": "Me In Real Life",
 }
 
 
@@ -34,11 +41,20 @@ def crawl_reddit(subreddit: str = "todayilearned", limit: int = 20) -> list[str]
     for child in data.get("data", {}).get("children", []):
         post = child.get("data", {})
         title = post.get("title", "").strip()
+        selftext = post.get("selftext", "").strip()
+
+        if post.get("stickied") or not title:
+            continue
 
         # Clean up TIL prefix
         title = re.sub(r"^TIL\s+(?:that\s+)?", "", title, flags=re.IGNORECASE)
 
-        if title and len(title) > 20 and not post.get("stickied"):
+        # For joke subreddits: combine title (setup) + selftext (punchline)
+        if selftext and len(selftext) < 300:
+            combined = f"{title} {selftext}"
+            if len(combined) > 20:
+                posts.append(combined)
+        elif len(title) > 20:
             posts.append(title)
 
     logger.info(f"Crawled {len(posts)} posts from r/{subreddit}")
