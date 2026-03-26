@@ -13,7 +13,8 @@ from pydantic import BaseModel
 
 from config import load_settings
 from content.script_generator import generate_content
-from media.pexels_client import get_footage_for_segments
+from media.pexels_client import get_footage_for_segments as pexels_get_footage
+from media.pixabay_client import get_footage_for_segments as pixabay_get_footage
 from media.tts import generate_voiceover
 from video.assembler import assemble_video
 
@@ -65,6 +66,7 @@ class GenerateRequest(BaseModel):
     transition: str = "fade"
     bgm_style: str = "none"
     sfx_enabled: bool = False
+    video_provider: str = "pexels"
     mode: str = "niche"
     segments: list[str] | None = None
     caption: str | None = None
@@ -77,6 +79,7 @@ class BatchRequest(BaseModel):
     workers: int = 1
     subtitle_style: str = "karaoke"
     tts_rate: str = "+0%"
+    video_provider: str = "pexels"
     transition: str = "fade"
     bgm_style: str = "none"
     sfx_enabled: bool = False
@@ -163,6 +166,7 @@ async def generate(req: GenerateRequest):
         transition=req.transition,
         bgm_style=req.bgm_style,
         sfx_enabled=req.sfx_enabled,
+        video_provider=req.video_provider,
     )
     asyncio.create_task(_run_batch(batch_req))
     return {"message": "Job started", "niche": req.niche}
@@ -220,6 +224,28 @@ async def websocket_endpoint(ws: WebSocket):
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
+def _get_footage(queries: list[str], settings, provider: str, temp_dir):
+    """Route to Pexels or Pixabay based on provider."""
+    if provider == "pixabay" and settings.pixabay_api_key:
+        return pixabay_get_footage(queries, settings.pixabay_api_key, temp_dir)
+    return pexels_get_footage(queries, settings.pexels_api_key, temp_dir)
+
+
+def _generate_vi_search_queries(segments: list[str]) -> list[str]:
+    """Generate Vietnamese search queries for Pixabay (supports lang=vi)."""
+    skip = {"bạn", "có", "biết", "không", "của", "và", "là", "một", "các",
+            "được", "những", "trong", "cho", "với", "đã", "sẽ", "đó", "này",
+            "khi", "nếu", "thì", "hay", "hơn", "mà", "như", "vì", "để",
+            "từ", "theo", "về", "tới", "đến", "còn", "rất", "cũng", "chỉ"}
+    queries = []
+    for seg in segments:
+        words = [w for w in seg.split() if w.lower().strip(".,!?") not in skip and len(w) > 1]
+        query = " ".join(words[:4]) if words else "thiên nhiên"
+        queries.append(query)
+    logger.info(f"Vietnamese search queries: {queries}")
+    return queries
+
+
 def _generate_search_queries(segments: list[str]) -> list[str]:
     """Generate focused English Pexels search queries from Vietnamese segments."""
     try:
@@ -313,8 +339,13 @@ async def _run_prompt_video(req: GenerateRequest):
         # Build ContentPlan from user input
         from content.script_generator import ContentPlan
 
-        # Generate English search queries from Vietnamese segments
-        search_queries = _generate_search_queries(req.segments)
+        # Generate search queries
+        if req.video_provider == "pixabay":
+            # Pixabay supports Vietnamese search - extract key phrases directly
+            search_queries = _generate_vi_search_queries(req.segments)
+        else:
+            # Pexels needs English queries
+            search_queries = _generate_search_queries(req.segments)
 
         content = ContentPlan(
             title="Custom Prompt Video",
@@ -339,7 +370,7 @@ async def _run_prompt_video(req: GenerateRequest):
 
         loop = asyncio.get_event_loop()
         footage_task = loop.run_in_executor(
-            None, get_footage_for_segments, content.search_queries, settings.pexels_api_key, temp_dir
+            None, _get_footage, content.search_queries, settings, req.video_provider, temp_dir
         )
         tts_task = generate_voiceover(content.script_segments, settings.tts_voice, temp_dir, rate=req.tts_rate)
         footage_paths, (audio_paths, word_timings) = await asyncio.gather(footage_task, tts_task)
@@ -369,7 +400,7 @@ async def _run_prompt_video(req: GenerateRequest):
         await _broadcast({"type": "status", **batch_status})
 
 
-async def _create_single_video(video_num: int, niche: str, settings, tts_voice: str | None, subtitle_style: str = "karaoke", tts_rate: str = "+0%", transition: str = "fade", bgm_style: str = "none", sfx_enabled: bool = False) -> Path | None:
+async def _create_single_video(video_num: int, niche: str, settings, tts_voice: str | None, subtitle_style: str = "karaoke", tts_rate: str = "+0%", transition: str = "fade", bgm_style: str = "none", sfx_enabled: bool = False, video_provider: str = "pexels") -> Path | None:
     """Create a single video. Returns output path or None on failure."""
     if tts_voice:
         settings.tts_voice = tts_voice
@@ -397,7 +428,7 @@ async def _create_single_video(video_num: int, niche: str, settings, tts_voice: 
         logger.info(f"[Video {video_num}] Downloading footage & generating voiceover...")
         loop = asyncio.get_event_loop()
         footage_task = loop.run_in_executor(
-            None, get_footage_for_segments, content.search_queries, settings.pexels_api_key, temp_dir
+            None, _get_footage, content.search_queries, settings, video_provider, temp_dir
         )
         tts_task = generate_voiceover(content.script_segments, settings.tts_voice, temp_dir, rate=tts_rate)
         footage_paths, (audio_paths, word_timings) = await asyncio.gather(footage_task, tts_task)
@@ -431,7 +462,7 @@ async def _worker(semaphore: asyncio.Semaphore, video_num: int, niche: str, sett
 
         result = await _create_single_video(
             video_num, niche, settings, req.tts_voice, req.subtitle_style,
-            req.tts_rate, req.transition, req.bgm_style, req.sfx_enabled,
+            req.tts_rate, req.transition, req.bgm_style, req.sfx_enabled, req.video_provider,
         )
 
         if result:

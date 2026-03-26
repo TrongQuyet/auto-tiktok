@@ -424,11 +424,20 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>TTS Voice</label>
-                        <select id="voiceSelect">
-                            <option value="">Default (from .env)</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>TTS Voice</label>
+                            <select id="voiceSelect">
+                                <option value="">Default (from .env)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Nguồn video</label>
+                            <select id="videoProvider">
+                                <option value="pexels">Pexels</option>
+                                <option value="pixabay">Pixabay</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -576,11 +585,20 @@ life tips</textarea>
                             <input type="number" id="batchWorkers" value="2" min="1" max="4">
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label>TTS Voice</label>
-                        <select id="batchVoiceSelect">
-                            <option value="">Default (from .env)</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>TTS Voice</label>
+                            <select id="batchVoiceSelect">
+                                <option value="">Default (from .env)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Nguồn video</label>
+                            <select id="batchVideoProvider">
+                                <option value="pexels">Pexels</option>
+                                <option value="pixabay">Pixabay</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -877,6 +895,7 @@ life tips</textarea>
                 transition: document.getElementById('transition').value,
                 bgm_style: document.getElementById('bgmStyle').value,
                 sfx_enabled: document.getElementById('sfxEnabled').checked,
+                video_provider: document.getElementById('videoProvider').value,
             };
         } else {
             const niche = document.getElementById('nicheInput').value.trim();
@@ -889,6 +908,7 @@ life tips</textarea>
                 transition: document.getElementById('transition').value,
                 bgm_style: document.getElementById('bgmStyle').value,
                 sfx_enabled: document.getElementById('sfxEnabled').checked,
+                video_provider: document.getElementById('videoProvider').value,
             };
         }
 
@@ -921,6 +941,7 @@ life tips</textarea>
             transition: document.getElementById('batchTransition').value,
             bgm_style: document.getElementById('batchBgmStyle').value,
             sfx_enabled: document.getElementById('batchSfxEnabled').checked,
+            video_provider: document.getElementById('batchVideoProvider').value,
             upload_to_tiktok: document.getElementById('batchUploadCheck').checked,
         };
         const voice = document.getElementById('batchVoiceSelect').value;

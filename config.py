@@ -12,6 +12,7 @@ class Settings:
     anthropic_api_key: str
     gemini_api_key: str
     pexels_api_key: str
+    pixabay_api_key: str
     tiktok_username: str
     tiktok_password: str
     video_width: int
@@ -34,6 +35,7 @@ def load_settings() -> Settings:
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         pexels_api_key=os.getenv("PEXELS_API_KEY", ""),
+        pixabay_api_key=os.getenv("PIXABAY_API_KEY", ""),
         tiktok_username=os.getenv("TIKTOK_USERNAME", ""),
         tiktok_password=os.getenv("TIKTOK_PASSWORD", ""),
         video_width=int(os.getenv("VIDEO_WIDTH", "1080")),
@@ -54,8 +56,8 @@ def load_settings() -> Settings:
         raise ValueError("ANTHROPIC_API_KEY is required when AI_PROVIDER=anthropic")
     if settings.ai_provider == "gemini" and not settings.gemini_api_key:
         raise ValueError("GEMINI_API_KEY is required when AI_PROVIDER=gemini")
-    if not settings.pexels_api_key:
-        raise ValueError("PEXELS_API_KEY is required")
+    if not settings.pexels_api_key and not settings.pixabay_api_key:
+        raise ValueError("PEXELS_API_KEY or PIXABAY_API_KEY is required")
 
     # Ensure directories exist
     settings.output_dir.mkdir(parents=True, exist_ok=True)
