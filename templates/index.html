@@ -449,6 +449,29 @@
                             </select>
                         </div>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Chuyển cảnh</label>
+                            <select id="transition">
+                                <option value="fade" selected>Fade (mượt)</option>
+                                <option value="none">Không (cắt cứng)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Nhạc nền</label>
+                            <select id="bgmStyle">
+                                <option value="none">Không</option>
+                                <option value="dramatic">Dramatic</option>
+                                <option value="lofi">Lo-fi</option>
+                                <option value="upbeat">Upbeat</option>
+                                <option value="calm">Calm</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="sfxEnabled">
+                        <label for="sfxEnabled">Thêm sound effects (woosh, ding)</label>
+                    </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="uploadCheck">
                         <label for="uploadCheck">Upload to TikTok sau khi tạo</label>
@@ -577,6 +600,29 @@ life tips</textarea>
                                 <option value="static">Tĩnh (hiện hết)</option>
                             </select>
                         </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Chuyển cảnh</label>
+                            <select id="batchTransition">
+                                <option value="fade" selected>Fade</option>
+                                <option value="none">Không</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Nhạc nền</label>
+                            <select id="batchBgmStyle">
+                                <option value="none">Không</option>
+                                <option value="dramatic">Dramatic</option>
+                                <option value="lofi">Lo-fi</option>
+                                <option value="upbeat">Upbeat</option>
+                                <option value="calm">Calm</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="batchSfxEnabled">
+                        <label for="batchSfxEnabled">Thêm sound effects</label>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="batchUploadCheck">
@@ -828,6 +874,9 @@ life tips</textarea>
                 upload_to_tiktok: uploadToTiktok,
                 subtitle_style: subtitleStyle,
                 tts_rate: ttsRate,
+                transition: document.getElementById('transition').value,
+                bgm_style: document.getElementById('bgmStyle').value,
+                sfx_enabled: document.getElementById('sfxEnabled').checked,
             };
         } else {
             const niche = document.getElementById('nicheInput').value.trim();
@@ -837,6 +886,9 @@ life tips</textarea>
                 upload_to_tiktok: uploadToTiktok,
                 subtitle_style: subtitleStyle,
                 tts_rate: ttsRate,
+                transition: document.getElementById('transition').value,
+                bgm_style: document.getElementById('bgmStyle').value,
+                sfx_enabled: document.getElementById('sfxEnabled').checked,
             };
         }
 
@@ -866,6 +918,9 @@ life tips</textarea>
             workers: Math.min(Math.max(workers, 1), 4),
             subtitle_style: document.getElementById('batchSubtitleStyle').value,
             tts_rate: document.getElementById('batchTtsRate').value,
+            transition: document.getElementById('batchTransition').value,
+            bgm_style: document.getElementById('batchBgmStyle').value,
+            sfx_enabled: document.getElementById('batchSfxEnabled').checked,
             upload_to_tiktok: document.getElementById('batchUploadCheck').checked,
         };
         const voice = document.getElementById('batchVoiceSelect').value;

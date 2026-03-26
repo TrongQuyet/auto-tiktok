@@ -21,6 +21,8 @@ from video.effects import add_text_overlay, apply_ken_burns, crop_to_vertical
 
 logger = logging.getLogger(__name__)
 
+ASSETS_DIR = Path(__file__).parent.parent / "assets"
+
 
 def _build_scene(
     footage_path: Path,
@@ -51,8 +53,8 @@ def _build_scene(
     return video
 
 
-def _ffmpeg_concat(scene_paths: list[Path], output_path: Path, settings: Settings) -> None:
-    """Concatenate scene files using FFmpeg concat demuxer (near-zero RAM)."""
+def _ffmpeg_concat_simple(scene_paths: list[Path], output_path: Path, settings: Settings) -> None:
+    """Concatenate without transitions (hard cut)."""
     concat_list = scene_paths[0].parent / "concat_list.txt"
     with open(concat_list, "w") as f:
         for p in scene_paths:
@@ -64,21 +66,158 @@ def _ffmpeg_concat(scene_paths: list[Path], output_path: Path, settings: Setting
         "-f", "concat", "-safe", "0",
         "-i", str(concat_list.resolve()),
         "-t", str(settings.video_max_duration),
-        "-c:v", "libx264",
-        "-c:a", "aac",
-        "-preset", "medium",
-        "-crf", "18",
+        "-c:v", "libx264", "-c:a", "aac",
+        "-preset", "medium", "-crf", "18",
         "-r", str(settings.video_fps),
         str(output_path),
     ]
 
-    logger.info(f"FFmpeg concat: {len(scene_paths)} scenes")
+    logger.info(f"FFmpeg concat (simple): {len(scene_paths)} scenes")
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     concat_list.unlink(missing_ok=True)
 
     if result.returncode != 0:
-        logger.error(f"FFmpeg concat error: {result.stderr[-500:]}")
         raise RuntimeError(f"FFmpeg concat failed: {result.stderr[-200:]}")
+
+
+def _ffmpeg_concat_fade(scene_paths: list[Path], output_path: Path, settings: Settings, fade_duration: float = 0.4) -> None:
+    """Concatenate with crossfade transitions between scenes."""
+    if len(scene_paths) <= 1:
+        return _ffmpeg_concat_simple(scene_paths, output_path, settings)
+
+    # Build xfade filter chain
+    # Input: [0:v][1:v][2:v]... → xfade between each pair
+    inputs = []
+    for p in scene_paths:
+        inputs.extend(["-i", str(p.resolve())])
+
+    # Get durations for offset calculation
+    durations = []
+    for p in scene_paths:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(p.resolve())],
+            capture_output=True, text=True,
+        )
+        durations.append(float(probe.stdout.strip() or "5"))
+
+    # Build xfade filter chain
+    n = len(scene_paths)
+    filter_parts = []
+    offset = durations[0] - fade_duration
+
+    # First xfade
+    filter_parts.append(f"[0:v][1:v]xfade=transition=fade:duration={fade_duration}:offset={max(offset, 0.1)}[v1]")
+    # Audio crossfade
+    filter_parts.append(f"[0:a][1:a]acrossfade=d={fade_duration}[a1]")
+
+    for i in range(2, n):
+        prev_v = f"v{i-1}"
+        prev_a = f"a{i-1}"
+        offset += durations[i-1] - fade_duration
+        filter_parts.append(f"[{prev_v}][{i}:v]xfade=transition=fade:duration={fade_duration}:offset={max(offset, 0.1)}[v{i}]")
+        filter_parts.append(f"[{prev_a}][{i}:a]acrossfade=d={fade_duration}[a{i}]")
+
+    last_v = f"[v{n-1}]"
+    last_a = f"[a{n-1}]"
+    filter_complex = ";".join(filter_parts)
+
+    cmd = [
+        "ffmpeg", "-y",
+        *inputs,
+        "-filter_complex", filter_complex,
+        "-map", last_v, "-map", last_a,
+        "-t", str(settings.video_max_duration),
+        "-c:v", "libx264", "-c:a", "aac",
+        "-preset", "medium", "-crf", "18",
+        "-r", str(settings.video_fps),
+        str(output_path),
+    ]
+
+    logger.info(f"FFmpeg concat (fade): {n} scenes, fade={fade_duration}s")
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+
+    if result.returncode != 0:
+        logger.warning(f"Fade concat failed, falling back to simple: {result.stderr[-200:]}")
+        _ffmpeg_concat_simple(scene_paths, output_path, settings)
+
+
+def _add_bgm(video_path: Path, bgm_style: str, bgm_volume: float = 0.15) -> None:
+    """Mix background music into the video in-place."""
+    bgm_file = ASSETS_DIR / "bgm" / f"{bgm_style}.mp3"
+    if not bgm_file.exists():
+        logger.warning(f"BGM file not found: {bgm_file}")
+        return
+
+    temp_output = video_path.with_suffix(".bgm.mp4")
+
+    # Get video duration
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(video_path)],
+        capture_output=True, text=True,
+    )
+    video_duration = float(probe.stdout.strip() or "30")
+
+    # Mix: loop BGM, lower volume, mix with original audio
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(video_path),
+        "-stream_loop", "-1", "-i", str(bgm_file),
+        "-filter_complex",
+        f"[1:a]volume={bgm_volume},afade=t=in:st=0:d=1,afade=t=out:st={max(video_duration-2, 0)}:d=2[bgm];"
+        f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]",
+        "-map", "0:v", "-map", "[aout]",
+        "-c:v", "copy", "-c:a", "aac",
+        "-shortest",
+        str(temp_output),
+    ]
+
+    logger.info(f"Adding BGM: {bgm_style} (volume={bgm_volume})")
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+
+    if result.returncode == 0:
+        temp_output.replace(video_path)
+        logger.info("BGM added successfully")
+    else:
+        logger.warning(f"BGM mix failed: {result.stderr[-200:]}")
+        temp_output.unlink(missing_ok=True)
+
+
+def _add_sfx(video_path: Path) -> None:
+    """Add sound effects: woosh at start, ding between scenes."""
+    woosh = ASSETS_DIR / "sfx" / "woosh.mp3"
+    ding = ASSETS_DIR / "sfx" / "ding.mp3"
+
+    if not woosh.exists() or not ding.exists():
+        logger.warning("SFX files not found")
+        return
+
+    temp_output = video_path.with_suffix(".sfx.mp4")
+
+    # Add woosh at 0.0s and ding at 0.5s
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(video_path),
+        "-i", str(woosh),
+        "-i", str(ding),
+        "-filter_complex",
+        "[1:a]volume=0.5,adelay=0|0[sfx1];"
+        "[2:a]volume=0.4,adelay=500|500[sfx2];"
+        "[0:a][sfx1][sfx2]amix=inputs=3:duration=first:dropout_transition=2[aout]",
+        "-map", "0:v", "-map", "[aout]",
+        "-c:v", "copy", "-c:a", "aac",
+        "-shortest",
+        str(temp_output),
+    ]
+
+    logger.info("Adding SFX...")
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+
+    if result.returncode == 0:
+        temp_output.replace(video_path)
+        logger.info("SFX added successfully")
+    else:
+        logger.warning(f"SFX mix failed: {result.stderr[-200:]}")
+        temp_output.unlink(missing_ok=True)
 
 
 def assemble_video(
@@ -88,16 +227,19 @@ def assemble_video(
     settings: Settings,
     subtitle_style: str = "karaoke",
     all_word_timings: list[list[dict]] | None = None,
+    transition: str = "fade",
+    bgm_style: str = "none",
+    sfx_enabled: bool = False,
 ) -> Path:
-    """Build the final TikTok video, one scene at a time to save RAM."""
-    logger.info(f"Assembling video: {content.title} (subtitle: {subtitle_style})")
+    """Build the final TikTok video with optional BGM, transitions, and SFX."""
+    logger.info(f"Assembling: {content.title} (sub={subtitle_style}, trans={transition}, bgm={bgm_style}, sfx={sfx_enabled})")
 
     temp_scene_dir = settings.temp_dir / f"scenes_{datetime.now().strftime('%H%M%S')}"
     temp_scene_dir.mkdir(parents=True, exist_ok=True)
     scene_paths = []
 
     try:
-        # Phase 1: Build and export each scene individually, free RAM after each
+        # Phase 1: Build each scene
         for i, (footage, audio, text) in enumerate(
             zip(footage_paths, audio_paths, content.script_segments)
         ):
@@ -111,25 +253,33 @@ def assemble_video(
             scene_file = temp_scene_dir / f"scene_{i:03d}.mp4"
             scene.write_videofile(
                 str(scene_file),
-                codec="libx264",
-                audio_codec="aac",
-                fps=settings.video_fps,
-                preset="fast",
-                threads=2,
-                logger=None,
+                codec="libx264", audio_codec="aac",
+                fps=settings.video_fps, preset="fast",
+                threads=2, logger=None,
             )
             scene_paths.append(scene_file)
 
-            # Free RAM immediately
             scene.close()
             del scene
             gc.collect()
             logger.info(f"Scene {i + 1} exported, memory freed")
 
-        # Phase 2: FFmpeg concat (near-zero RAM)
+        # Phase 2: Concat with transitions
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = settings.output_dir / f"video_{timestamp}.mp4"
-        _ffmpeg_concat(scene_paths, output_path, settings)
+
+        if transition == "fade":
+            _ffmpeg_concat_fade(scene_paths, output_path, settings)
+        else:
+            _ffmpeg_concat_simple(scene_paths, output_path, settings)
+
+        # Phase 3: Add BGM
+        if bgm_style and bgm_style != "none":
+            _add_bgm(output_path, bgm_style)
+
+        # Phase 4: Add SFX
+        if sfx_enabled:
+            _add_sfx(output_path)
 
         logger.info(f"Video exported: {output_path}")
         return output_path

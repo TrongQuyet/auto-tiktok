@@ -62,6 +62,9 @@ class GenerateRequest(BaseModel):
     tts_voice: str | None = None
     tts_rate: str = "+0%"
     subtitle_style: str = "karaoke"
+    transition: str = "fade"
+    bgm_style: str = "none"
+    sfx_enabled: bool = False
     mode: str = "niche"
     segments: list[str] | None = None
     caption: str | None = None
@@ -74,6 +77,9 @@ class BatchRequest(BaseModel):
     workers: int = 1
     subtitle_style: str = "karaoke"
     tts_rate: str = "+0%"
+    transition: str = "fade"
+    bgm_style: str = "none"
+    sfx_enabled: bool = False
     upload_to_tiktok: bool = False
     tts_voice: str | None = None
 
@@ -154,6 +160,9 @@ async def generate(req: GenerateRequest):
         tts_voice=req.tts_voice,
         tts_rate=req.tts_rate,
         subtitle_style=req.subtitle_style,
+        transition=req.transition,
+        bgm_style=req.bgm_style,
+        sfx_enabled=req.sfx_enabled,
     )
     asyncio.create_task(_run_batch(batch_req))
     return {"message": "Job started", "niche": req.niche}
@@ -339,7 +348,8 @@ async def _run_prompt_video(req: GenerateRequest):
         batch_status.update(status="Assembling video...", progress=60)
         await _broadcast({"type": "status", **batch_status})
         video_path = await loop.run_in_executor(
-            None, assemble_video, content, footage_paths, audio_paths, settings, req.subtitle_style, word_timings
+            None, assemble_video, content, footage_paths, audio_paths, settings,
+            req.subtitle_style, word_timings, req.transition, req.bgm_style, req.sfx_enabled,
         )
 
         batch_status.update(completed=1, video_path=str(video_path))
@@ -359,7 +369,7 @@ async def _run_prompt_video(req: GenerateRequest):
         await _broadcast({"type": "status", **batch_status})
 
 
-async def _create_single_video(video_num: int, niche: str, settings, tts_voice: str | None, subtitle_style: str = "karaoke", tts_rate: str = "+0%") -> Path | None:
+async def _create_single_video(video_num: int, niche: str, settings, tts_voice: str | None, subtitle_style: str = "karaoke", tts_rate: str = "+0%", transition: str = "fade", bgm_style: str = "none", sfx_enabled: bool = False) -> Path | None:
     """Create a single video. Returns output path or None on failure."""
     if tts_voice:
         settings.tts_voice = tts_voice
@@ -395,7 +405,8 @@ async def _create_single_video(video_num: int, niche: str, settings, tts_voice: 
         # Step 3: Assemble video
         logger.info(f"[Video {video_num}] Assembling video...")
         video_path = await loop.run_in_executor(
-            None, assemble_video, content, footage_paths, audio_paths, settings, subtitle_style, word_timings
+            None, assemble_video, content, footage_paths, audio_paths, settings,
+            subtitle_style, word_timings, transition, bgm_style, sfx_enabled,
         )
         logger.info(f"[Video {video_num}] Done! -> {video_path}")
         return video_path
@@ -418,7 +429,10 @@ async def _worker(semaphore: asyncio.Semaphore, video_num: int, niche: str, sett
         batch_status["progress"] = int((batch_status["completed"] / batch_status["total"]) * 100)
         await _broadcast({"type": "status", **batch_status})
 
-        result = await _create_single_video(video_num, niche, settings, req.tts_voice, req.subtitle_style, req.tts_rate)
+        result = await _create_single_video(
+            video_num, niche, settings, req.tts_voice, req.subtitle_style,
+            req.tts_rate, req.transition, req.bgm_style, req.sfx_enabled,
+        )
 
         if result:
             batch_status["completed"] += 1

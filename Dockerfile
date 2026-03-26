@@ -32,7 +32,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create directories
-RUN mkdir -p output temp chrome_profile templates
+RUN mkdir -p output temp chrome_profile templates assets/bgm assets/sfx
+
+# Generate BGM and SFX assets
+RUN chmod +x assets/generate_assets.sh && bash assets/generate_assets.sh
 
 # Expose ports: 8000 = Web UI, 6080 = noVNC
 EXPOSE 8000 6080
