@@ -16,7 +16,7 @@ def search_videos(query: str, api_key: str, orientation: str = "portrait", per_p
         "query": query,
         "orientation": orientation,
         "per_page": per_page,
-        "size": "medium",
+        "size": "large",
     }
     resp = requests.get(url, headers=headers, params=params, timeout=30)
     resp.raise_for_status()

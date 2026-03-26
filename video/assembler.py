@@ -67,7 +67,7 @@ def _ffmpeg_concat(scene_paths: list[Path], output_path: Path, settings: Setting
         "-c:v", "libx264",
         "-c:a", "aac",
         "-preset", "medium",
-        "-crf", "23",
+        "-crf", "18",
         "-r", str(settings.video_fps),
         str(output_path),
     ]
@@ -114,7 +114,7 @@ def assemble_video(
                 codec="libx264",
                 audio_codec="aac",
                 fps=settings.video_fps,
-                preset="ultrafast",
+                preset="fast",
                 threads=2,
                 logger=None,
             )

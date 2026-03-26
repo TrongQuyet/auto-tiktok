@@ -55,7 +55,7 @@ def apply_ken_burns(clip, zoom_factor=1.1):
         top = (h - new_h) // 2
 
         cropped = frame[top:top + new_h, left:left + new_w]
-        return cv2.resize(cropped, (w, h), interpolation=cv2.INTER_LINEAR)
+        return cv2.resize(cropped, (w, h), interpolation=cv2.INTER_LANCZOS4)
 
     return clip.fl(zoom_effect)
 
