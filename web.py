@@ -111,6 +111,16 @@ async def get_video(filename: str):
     return FileResponse(path, media_type="video/mp4")
 
 
+@app.delete("/api/videos/{filename}")
+async def delete_video(filename: str):
+    path = Path("output") / filename
+    if not path.exists():
+        return {"error": "Video not found"}
+    path.unlink()
+    logger.info(f"Deleted video: {filename}")
+    return {"message": f"Deleted {filename}"}
+
+
 @app.get("/api/voices")
 async def list_voices():
     """List available edge-tts voices."""

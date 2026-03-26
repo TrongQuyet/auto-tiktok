@@ -269,14 +269,26 @@
         .video-item {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 12px;
             padding: 12px 0;
             border-bottom: 1px solid var(--border);
         }
         .video-item:last-child { border-bottom: none; }
-        .video-info h4 { font-size: 14px; font-weight: 500; }
-        .video-info span { font-size: 12px; color: var(--text2); }
-        .video-actions { display: flex; gap: 6px; }
+        .video-thumb {
+            width: 64px;
+            height: 90px;
+            border-radius: 6px;
+            object-fit: cover;
+            background: var(--bg);
+            flex-shrink: 0;
+            cursor: pointer;
+        }
+        .video-info { flex: 1; min-width: 0; }
+        .video-info h4 { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .video-info span { font-size: 11px; color: var(--text2); }
+        .video-actions { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+        .btn-danger { background: #d32f2f; color: #fff; }
+        .btn-danger:hover { background: #b71c1c; }
 
         /* ── Subtitle Preview ───────────────── */
         .sub-preview { max-height: 200px; overflow-y: auto; margin-top: 12px; }
@@ -865,14 +877,16 @@ life tips</textarea>
 
         area.innerHTML = `<ul class="video-list">${videos.map(v => `
             <li class="video-item">
+                <video class="video-thumb" src="${v.url}" muted preload="metadata" onclick="playVideo('${v.url}')" onloadeddata="this.currentTime=1"></video>
                 <div class="video-info">
                     <h4>${v.name}</h4>
                     <span>${v.size_mb} MB &middot; ${v.created}</span>
                 </div>
                 <div class="video-actions">
                     <button class="btn btn-sm btn-outline" onclick="playVideo('${v.url}')">Play</button>
-                    <a class="btn btn-sm btn-outline" href="${v.url}" download>Download</a>
+                    <a class="btn btn-sm btn-outline" href="${v.url}" download>DL</a>
                     <button class="btn btn-sm btn-upload" onclick="uploadVideo('${v.name}')">TikTok</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteVideo('${v.name}')">Xóa</button>
                 </div>
             </li>
         `).join('')}</ul>`;
@@ -892,6 +906,14 @@ life tips</textarea>
         const res = await fetch(`/api/upload/${filename}`, { method: 'POST' });
         const data = await res.json();
         if (data.error) alert(data.error);
+    }
+
+    async function deleteVideo(filename) {
+        if (!confirm(`Xóa "${filename}"?`)) return;
+        const res = await fetch(`/api/videos/${filename}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.error) alert(data.error);
+        else loadVideos();
     }
 
     // ── Load Voices ────────────────────────────────────────────────

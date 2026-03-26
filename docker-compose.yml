@@ -8,7 +8,7 @@ services:
       - "8000:8000"  # Web UI
       - "6080:6080"  # noVNC - browser view for TikTok login
     volumes:
-      - ./output:/app/output
+      - ${OUTPUT_HOST_DIR:-./output}:/app/output
       - ./chrome_profile:/app/chrome_profile
       - ./templates:/app/templates
       - ./content:/app/content
