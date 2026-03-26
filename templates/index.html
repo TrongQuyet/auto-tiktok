@@ -382,15 +382,50 @@
             <!-- Single Video Tab -->
             <div class="tab-content active" id="tab-single">
                 <div class="card-body">
-                    <div class="form-group">
-                        <label>Niche / Topic</label>
-                        <input type="text" id="nicheInput" value="motivation" placeholder="vd: motivation, fun facts, life tips">
+                    <!-- Mode Toggle -->
+                    <div style="display:flex; gap:8px; margin-bottom:16px;">
+                        <button class="btn btn-sm" id="modeNiche" onclick="setMode('niche')" style="flex:1; background:var(--accent); color:#fff;">Niche / Topic</button>
+                        <button class="btn btn-sm btn-outline" id="modePrompt" onclick="setMode('prompt')" style="flex:1;">Custom Prompt</button>
                     </div>
-                    <div class="form-group">
-                        <label>TTS Voice</label>
-                        <select id="voiceSelect">
-                            <option value="">Default (from .env)</option>
-                        </select>
+
+                    <!-- Niche Mode -->
+                    <div id="nicheMode">
+                        <div class="form-group">
+                            <label>Niche / Topic</label>
+                            <input type="text" id="nicheInput" value="motivation" placeholder="vd: motivation, fun facts, life tips">
+                        </div>
+                    </div>
+
+                    <!-- Prompt Mode -->
+                    <div id="promptMode" style="display:none;">
+                        <div class="form-group">
+                            <label>Nhập kịch bản video (mỗi dòng = 1 đoạn voiceover)</label>
+                            <textarea id="promptInput" rows="6" placeholder="Dòng 1: Bạn có biết mật ong không bao giờ hỏng?&#10;Dòng 2: Các nhà khảo cổ tìm thấy mật ong 3000 năm tuổi...&#10;Dòng 3: ..." style="width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;resize:vertical;outline:none;font-family:inherit;"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Caption TikTok</label>
+                            <input type="text" id="promptCaption" placeholder="Caption cho video" value="">
+                        </div>
+                        <div class="form-group">
+                            <label>Hashtags (cách nhau bởi dấu cách)</label>
+                            <input type="text" id="promptHashtags" placeholder="#fyp #viral #trending" value="#fyp #viral #trending">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>TTS Voice</label>
+                            <select id="voiceSelect">
+                                <option value="">Default (from .env)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Kiểu phụ đề</label>
+                            <select id="subtitleStyle">
+                                <option value="karaoke">Karaoke (từng chữ)</option>
+                                <option value="static">Tĩnh (hiện hết)</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="uploadCheck">
@@ -496,11 +531,20 @@ life tips</textarea>
                             <input type="number" id="batchWorkers" value="2" min="1" max="4">
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label>TTS Voice</label>
-                        <select id="batchVoiceSelect">
-                            <option value="">Default (from .env)</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>TTS Voice</label>
+                            <select id="batchVoiceSelect">
+                                <option value="">Default (from .env)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Kiểu phụ đề</label>
+                            <select id="batchSubtitleStyle">
+                                <option value="karaoke">Karaoke (từng chữ)</option>
+                                <option value="static">Tĩnh (hiện hết)</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="checkbox-group">
                         <input type="checkbox" id="batchUploadCheck">
@@ -706,20 +750,62 @@ life tips</textarea>
         ).join('');
     }
 
+    // ── Mode Toggle ─────────────────────────────────────────────
+    let currentMode = 'niche';
+    function setMode(mode) {
+        currentMode = mode;
+        document.getElementById('nicheMode').style.display = mode === 'niche' ? 'block' : 'none';
+        document.getElementById('promptMode').style.display = mode === 'prompt' ? 'block' : 'none';
+        document.getElementById('modeNiche').className = mode === 'niche' ? 'btn btn-sm' : 'btn btn-sm btn-outline';
+        document.getElementById('modePrompt').className = mode === 'prompt' ? 'btn btn-sm' : 'btn btn-sm btn-outline';
+        document.getElementById('modeNiche').style.background = mode === 'niche' ? 'var(--accent)' : '';
+        document.getElementById('modeNiche').style.color = mode === 'niche' ? '#fff' : '';
+        document.getElementById('modePrompt').style.background = mode === 'prompt' ? 'var(--accent)' : '';
+        document.getElementById('modePrompt').style.color = mode === 'prompt' ? '#fff' : '';
+    }
+
     // ── Single Generate ────────────────────────────────────────────
     async function startGenerate() {
-        const niche = document.getElementById('nicheInput').value.trim();
-        if (!niche) return alert('Vui lòng nhập niche/topic');
-
-        const body = {
-            niche,
-            upload_to_tiktok: document.getElementById('uploadCheck').checked,
-        };
+        const uploadToTiktok = document.getElementById('uploadCheck').checked;
         const voice = document.getElementById('voiceSelect').value;
-        if (voice) body.tts_voice = voice;
 
         contentPreview.classList.remove('active');
         batchStats.style.display = 'none';
+
+        let body;
+
+        const subtitleStyle = document.getElementById('subtitleStyle').value;
+
+        if (currentMode === 'prompt') {
+            const promptText = document.getElementById('promptInput').value.trim();
+            if (!promptText) return alert('Vui lòng nhập kịch bản video');
+
+            const segments = promptText.split('\n').map(s => s.trim()).filter(s => s);
+            if (segments.length === 0) return alert('Cần ít nhất 1 dòng kịch bản');
+
+            const caption = document.getElementById('promptCaption').value.trim() || '';
+            const hashtagsRaw = document.getElementById('promptHashtags').value.trim();
+            const hashtags = hashtagsRaw ? hashtagsRaw.split(/\s+/).filter(h => h) : ['#fyp'];
+
+            body = {
+                mode: 'prompt',
+                segments: segments,
+                caption: caption,
+                hashtags: hashtags,
+                upload_to_tiktok: uploadToTiktok,
+                subtitle_style: subtitleStyle,
+            };
+        } else {
+            const niche = document.getElementById('nicheInput').value.trim();
+            if (!niche) return alert('Vui lòng nhập niche/topic');
+            body = {
+                niche: niche,
+                upload_to_tiktok: uploadToTiktok,
+                subtitle_style: subtitleStyle,
+            };
+        }
+
+        if (voice) body.tts_voice = voice;
 
         const res = await fetch('/api/generate', {
             method: 'POST',
@@ -743,6 +829,7 @@ life tips</textarea>
             niches,
             count: Math.min(Math.max(count, 1), 20),
             workers: Math.min(Math.max(workers, 1), 4),
+            subtitle_style: document.getElementById('batchSubtitleStyle').value,
             upload_to_tiktok: document.getElementById('batchUploadCheck').checked,
         };
         const voice = document.getElementById('batchVoiceSelect').value;

@@ -28,6 +28,7 @@ def _build_scene(
     text: str,
     target_w: int,
     target_h: int,
+    subtitle_style: str = "karaoke",
 ) -> VideoFileClip:
     """Build a single scene: crop footage, match audio duration, add effects."""
     video = VideoFileClip(str(footage_path))
@@ -43,7 +44,7 @@ def _build_scene(
     video = video.subclip(0, audio_duration)
 
     video = apply_ken_burns(video, zoom_factor=1.08)
-    video = add_text_overlay(video, text)
+    video = add_text_overlay(video, text, style=subtitle_style)
     video = video.set_audio(audio)
 
     return video
@@ -84,9 +85,10 @@ def assemble_video(
     footage_paths: list[Path],
     audio_paths: list[Path],
     settings: Settings,
+    subtitle_style: str = "karaoke",
 ) -> Path:
     """Build the final TikTok video, one scene at a time to save RAM."""
-    logger.info(f"Assembling video: {content.title}")
+    logger.info(f"Assembling video: {content.title} (subtitle: {subtitle_style})")
 
     temp_scene_dir = settings.temp_dir / f"scenes_{datetime.now().strftime('%H%M%S')}"
     temp_scene_dir.mkdir(parents=True, exist_ok=True)
@@ -99,7 +101,8 @@ def assemble_video(
         ):
             logger.info(f"Building scene {i + 1}/{len(footage_paths)}")
             scene = _build_scene(
-                footage, audio, text, settings.video_width, settings.video_height
+                footage, audio, text, settings.video_width, settings.video_height,
+                subtitle_style=subtitle_style,
             )
 
             scene_file = temp_scene_dir / f"scene_{i:03d}.mp4"

@@ -60,12 +60,18 @@ class GenerateRequest(BaseModel):
     niche: str = "motivation"
     upload_to_tiktok: bool = False
     tts_voice: str | None = None
+    subtitle_style: str = "karaoke"  # "static" or "karaoke"
+    mode: str = "niche"  # "niche" or "prompt"
+    segments: list[str] | None = None
+    caption: str | None = None
+    hashtags: list[str] | None = None
 
 
 class BatchRequest(BaseModel):
     niches: list[str] = ["motivation"]
     count: int = 1
     workers: int = 1
+    subtitle_style: str = "karaoke"
     upload_to_tiktok: bool = False
     tts_voice: str | None = None
 
@@ -124,12 +130,17 @@ async def generate(req: GenerateRequest):
     if batch_status["running"]:
         return {"error": "A job is already running"}
 
+    if req.mode == "prompt" and req.segments:
+        asyncio.create_task(_run_prompt_video(req))
+        return {"message": "Prompt video started", "segments": len(req.segments)}
+
     batch_req = BatchRequest(
         niches=[req.niche],
         count=1,
         workers=1,
         upload_to_tiktok=req.upload_to_tiktok,
         tts_voice=req.tts_voice,
+        subtitle_style=req.subtitle_style,
     )
     asyncio.create_task(_run_batch(batch_req))
     return {"message": "Job started", "niche": req.niche}
@@ -195,7 +206,84 @@ async def _broadcast(data: dict):
             ws_clients.remove(ws)
 
 
-async def _create_single_video(video_num: int, niche: str, settings, tts_voice: str | None) -> Path | None:
+async def _run_prompt_video(req: GenerateRequest):
+    """Create video from user-provided script segments."""
+    batch_status.update(
+        running=True, total=1, completed=0, failed=0, current_video=1,
+        status="Creating video from prompt...", progress=0, video_path=None, error=None,
+    )
+    await _broadcast({"type": "status", **batch_status})
+
+    try:
+        settings = load_settings()
+        if req.tts_voice:
+            settings.tts_voice = req.tts_voice
+
+        temp_dir = Path("temp/prompt_video")
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build ContentPlan from user input
+        from content.script_generator import ContentPlan
+
+        # Generate simple search queries from segments
+        search_queries = []
+        for seg in req.segments:
+            words = seg.split()[:3]
+            search_queries.append(" ".join(words) if len(words) >= 2 else "nature landscape")
+
+        content = ContentPlan(
+            title="Custom Prompt Video",
+            script_segments=req.segments,
+            caption=req.caption or "",
+            hashtags=req.hashtags or ["#fyp"],
+            search_queries=search_queries,
+        )
+
+        await _broadcast({
+            "type": "content",
+            "video_num": 1,
+            "title": content.title,
+            "segments": content.script_segments,
+            "caption": content.caption,
+            "hashtags": content.hashtags,
+        })
+
+        # Download footage + TTS
+        batch_status.update(status="Downloading footage & generating voiceover...", progress=30)
+        await _broadcast({"type": "status", **batch_status})
+
+        loop = asyncio.get_event_loop()
+        footage_task = loop.run_in_executor(
+            None, get_footage_for_segments, content.search_queries, settings.pexels_api_key, temp_dir
+        )
+        tts_task = generate_voiceover(content.script_segments, settings.tts_voice, temp_dir)
+        footage_paths, audio_paths = await asyncio.gather(footage_task, tts_task)
+
+        # Assemble
+        batch_status.update(status="Assembling video...", progress=60)
+        await _broadcast({"type": "status", **batch_status})
+        video_path = await loop.run_in_executor(
+            None, assemble_video, content, footage_paths, audio_paths, settings, req.subtitle_style
+        )
+
+        batch_status.update(completed=1, video_path=str(video_path))
+
+        # Upload if requested
+        if req.upload_to_tiktok:
+            await _run_upload(video_path)
+
+        batch_status.update(running=False, status="Done!", progress=100)
+        await _broadcast({"type": "status", **batch_status})
+
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+    except Exception as e:
+        logger.error(f"Prompt video error: {e}")
+        batch_status.update(running=False, status=f"Error: {e}", progress=0, error=str(e))
+        await _broadcast({"type": "status", **batch_status})
+
+
+async def _create_single_video(video_num: int, niche: str, settings, tts_voice: str | None, subtitle_style: str = "karaoke") -> Path | None:
     """Create a single video. Returns output path or None on failure."""
     if tts_voice:
         settings.tts_voice = tts_voice
@@ -231,7 +319,7 @@ async def _create_single_video(video_num: int, niche: str, settings, tts_voice: 
         # Step 3: Assemble video
         logger.info(f"[Video {video_num}] Assembling video...")
         video_path = await loop.run_in_executor(
-            None, assemble_video, content, footage_paths, audio_paths, settings
+            None, assemble_video, content, footage_paths, audio_paths, settings, subtitle_style
         )
         logger.info(f"[Video {video_num}] Done! -> {video_path}")
         return video_path
@@ -254,7 +342,7 @@ async def _worker(semaphore: asyncio.Semaphore, video_num: int, niche: str, sett
         batch_status["progress"] = int((batch_status["completed"] / batch_status["total"]) * 100)
         await _broadcast({"type": "status", **batch_status})
 
-        result = await _create_single_video(video_num, niche, settings, req.tts_voice)
+        result = await _create_single_video(video_num, niche, settings, req.tts_voice, req.subtitle_style)
 
         if result:
             batch_status["completed"] += 1
