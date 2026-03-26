@@ -197,6 +197,31 @@ async def websocket_endpoint(ws: WebSocket):
         ws_clients.remove(ws)
 
 
+# ── Helpers ─────────────────────────────────────────────────────────
+def _generate_search_queries(segments: list[str]) -> list[str]:
+    """Generate English Pexels search queries from Vietnamese segments."""
+    try:
+        from deep_translator import GoogleTranslator
+        translator = GoogleTranslator(source="vi", target="en")
+        queries = []
+        for seg in segments:
+            # Translate to English, take key phrase
+            en = translator.translate(seg[:100])
+            if en:
+                # Extract 2-4 important words (skip common words)
+                skip = {"the", "a", "an", "is", "are", "was", "were", "of", "to", "in", "and", "that", "it", "for", "you", "do", "did", "can", "not", "this", "but", "they", "have", "has", "with", "from"}
+                words = [w for w in en.split() if w.lower() not in skip and len(w) > 2]
+                query = " ".join(words[:3]) if words else "nature"
+                queries.append(query)
+            else:
+                queries.append("nature landscape")
+        logger.info(f"Search queries: {queries}")
+        return queries
+    except Exception as e:
+        logger.warning(f"Translation failed for search queries: {e}")
+        return ["nature landscape"] * len(segments)
+
+
 # ── Pipeline Runner ─────────────────────────────────────────────────
 async def _broadcast(data: dict):
     for ws in ws_clients[:]:
@@ -225,11 +250,8 @@ async def _run_prompt_video(req: GenerateRequest):
         # Build ContentPlan from user input
         from content.script_generator import ContentPlan
 
-        # Generate simple search queries from segments
-        search_queries = []
-        for seg in req.segments:
-            words = seg.split()[:3]
-            search_queries.append(" ".join(words) if len(words) >= 2 else "nature landscape")
+        # Generate English search queries from Vietnamese segments
+        search_queries = _generate_search_queries(req.segments)
 
         content = ContentPlan(
             title="Custom Prompt Video",
