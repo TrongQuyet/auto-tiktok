@@ -257,13 +257,13 @@ async def _run_prompt_video(req: GenerateRequest):
             None, get_footage_for_segments, content.search_queries, settings.pexels_api_key, temp_dir
         )
         tts_task = generate_voiceover(content.script_segments, settings.tts_voice, temp_dir)
-        footage_paths, audio_paths = await asyncio.gather(footage_task, tts_task)
+        footage_paths, (audio_paths, word_timings) = await asyncio.gather(footage_task, tts_task)
 
         # Assemble
         batch_status.update(status="Assembling video...", progress=60)
         await _broadcast({"type": "status", **batch_status})
         video_path = await loop.run_in_executor(
-            None, assemble_video, content, footage_paths, audio_paths, settings, req.subtitle_style
+            None, assemble_video, content, footage_paths, audio_paths, settings, req.subtitle_style, word_timings
         )
 
         batch_status.update(completed=1, video_path=str(video_path))
@@ -314,12 +314,12 @@ async def _create_single_video(video_num: int, niche: str, settings, tts_voice: 
             None, get_footage_for_segments, content.search_queries, settings.pexels_api_key, temp_dir
         )
         tts_task = generate_voiceover(content.script_segments, settings.tts_voice, temp_dir)
-        footage_paths, audio_paths = await asyncio.gather(footage_task, tts_task)
+        footage_paths, (audio_paths, word_timings) = await asyncio.gather(footage_task, tts_task)
 
         # Step 3: Assemble video
         logger.info(f"[Video {video_num}] Assembling video...")
         video_path = await loop.run_in_executor(
-            None, assemble_video, content, footage_paths, audio_paths, settings, subtitle_style
+            None, assemble_video, content, footage_paths, audio_paths, settings, subtitle_style, word_timings
         )
         logger.info(f"[Video {video_num}] Done! -> {video_path}")
         return video_path

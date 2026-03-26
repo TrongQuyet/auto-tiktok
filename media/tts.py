@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 
@@ -6,17 +7,50 @@ import edge_tts
 logger = logging.getLogger(__name__)
 
 
-async def generate_single(text: str, voice: str, output_path: Path) -> Path:
+async def generate_single(text: str, voice: str, output_path: Path) -> tuple[Path, list[dict]]:
+    """
+    Generate TTS audio and capture word-level timestamps.
+    Returns (audio_path, word_timings) where word_timings is:
+    [{"word": "Bạn", "start": 0.0, "end": 0.35}, ...]
+    """
     communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(str(output_path))
-    logger.info(f"TTS generated: {output_path}")
-    return output_path
+    word_timings = []
+
+    with open(output_path, "wb") as f:
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                f.write(chunk["data"])
+            elif chunk["type"] == "WordBoundary":
+                offset_ms = chunk["offset"] / 10000  # Convert 100ns units to ms
+                duration_ms = chunk["duration"] / 10000
+                word_timings.append({
+                    "word": chunk["text"],
+                    "start": offset_ms / 1000,  # Convert to seconds
+                    "end": (offset_ms + duration_ms) / 1000,
+                })
+
+    logger.info(f"TTS generated: {output_path} ({len(word_timings)} word timings)")
+    return output_path, word_timings
 
 
-async def generate_voiceover(segments: list[str], voice: str, temp_dir: Path) -> list[Path]:
+async def generate_voiceover(
+    segments: list[str], voice: str, temp_dir: Path
+) -> tuple[list[Path], list[list[dict]]]:
+    """
+    Generate voiceover for all segments.
+    Returns (audio_paths, all_word_timings).
+    """
     paths = []
+    all_timings = []
     for i, segment in enumerate(segments):
         output_path = temp_dir / f"audio_{i}.mp3"
-        await generate_single(segment, voice, output_path)
-        paths.append(output_path)
-    return paths
+        audio_path, timings = await generate_single(segment, voice, output_path)
+        paths.append(audio_path)
+        all_timings.append(timings)
+
+    # Save timings to JSON for debugging
+    timings_path = temp_dir / "word_timings.json"
+    with open(timings_path, "w", encoding="utf-8") as f:
+        json.dump(all_timings, f, ensure_ascii=False, indent=2)
+
+    return paths, all_timings

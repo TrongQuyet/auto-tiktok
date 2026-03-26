@@ -156,8 +156,8 @@ def _add_static_overlay(clip, text: str):
     return CompositeVideoClip([clip, text_clip], size=(w, h))
 
 
-# ── Karaoke subtitle (one word at a time) ──────────────────────────
-def _add_karaoke_overlay(clip, text: str):
+# ── Karaoke subtitle (one word at a time, synced to speech) ────────
+def _add_karaoke_overlay(clip, text: str, word_timings: list[dict] | None = None):
     words = text.split()
     if not words:
         return clip
@@ -167,8 +167,20 @@ def _add_karaoke_overlay(clip, text: str):
     font_big = _get_font(56)
     font_small = _get_font(40)
 
-    # Time per word
-    time_per_word = duration / len(words)
+    # Build timing map: for each word, (start_time, end_time)
+    if word_timings and len(word_timings) > 0:
+        # Use real timestamps from edge-tts
+        timings = []
+        for wt in word_timings:
+            timings.append((wt["start"], wt["end"]))
+    else:
+        # Fallback: distribute evenly
+        time_per_word = duration / len(words)
+        timings = [(i * time_per_word, (i + 1) * time_per_word) for i in range(len(words))]
+
+    # Map timing words to text words (edge-tts may split differently)
+    # Use min of both lengths for safety
+    n = min(len(words), len(timings))
 
     # Y position: center-bottom area
     y_pos = h - 300
@@ -176,13 +188,32 @@ def _add_karaoke_overlay(clip, text: str):
     def make_frame(get_frame, t):
         frame = get_frame(t)
 
-        # Which word is active now
-        word_idx = min(int(t / time_per_word), len(words) - 1)
-        word = words[word_idx]
+        # Find which word is active at time t
+        active_idx = -1
+        for i in range(n):
+            start, end = timings[i]
+            if start <= t <= end:
+                active_idx = i
+                break
+        # If between words, show the next upcoming word
+        if active_idx == -1:
+            for i in range(n):
+                if t < timings[i][0]:
+                    # In gap before word i, show previous word if close
+                    if i > 0 and t - timings[i - 1][1] < 0.1:
+                        active_idx = i - 1
+                    break
+            else:
+                # Past all words, show last word
+                active_idx = n - 1
 
-        # Progress within this word (0.0 to 1.0)
-        word_start = word_idx * time_per_word
-        word_progress = (t - word_start) / time_per_word
+        if active_idx < 0:
+            return frame
+
+        word = words[active_idx]
+        word_start, word_end = timings[active_idx]
+        word_duration = max(word_end - word_start, 0.05)
+        word_progress = (t - word_start) / word_duration
 
         img = Image.fromarray(frame.copy())
         draw = ImageDraw.Draw(img)
@@ -193,13 +224,11 @@ def _add_karaoke_overlay(clip, text: str):
         text_h = bbox[3] - bbox[1]
         x = (w - text_w) // 2
 
-        # Scale effect: pop in at start of word
+        # Pop-in effect at start of word
         if word_progress < 0.15:
-            # Use smaller font for pop-in effect
             bbox_s = draw.textbbox((0, 0), word, font=font_small)
             text_w_s = bbox_s[2] - bbox_s[0]
             x_s = (w - text_w_s) // 2
-
             pad = 14
             draw.rounded_rectangle(
                 [x_s - pad, y_pos - pad, x_s + text_w_s + pad, y_pos + 42 + pad],
@@ -208,15 +237,12 @@ def _add_karaoke_overlay(clip, text: str):
             draw.text((x_s + 2, y_pos + 2), word, fill=(0, 0, 0, 180), font=font_small)
             draw.text((x_s, y_pos), word, fill=(255, 215, 0, 255), font=font_small)
         else:
-            # Full size word with highlight
             pad = 14
             draw.rounded_rectangle(
                 [x - pad, y_pos - pad - 4, x + text_w + pad, y_pos + text_h + pad + 4],
                 radius=10, fill=(0, 0, 0, 200),
             )
-            # Shadow
             draw.text((x + 2, y_pos + 2), word, fill=(0, 0, 0, 180), font=font_big)
-            # Main text: yellow highlight
             draw.text((x, y_pos), word, fill=(255, 215, 0, 255), font=font_big)
 
         return np.array(img)
@@ -225,8 +251,8 @@ def _add_karaoke_overlay(clip, text: str):
 
 
 # ── Public API ──────────────────────────────────────────────────────
-def add_text_overlay(clip, text: str, style: str = "karaoke"):
+def add_text_overlay(clip, text: str, style: str = "karaoke", word_timings: list[dict] | None = None):
     """Add subtitle overlay. style: 'static' or 'karaoke'."""
     if style == "karaoke":
-        return _add_karaoke_overlay(clip, text)
+        return _add_karaoke_overlay(clip, text, word_timings=word_timings)
     return _add_static_overlay(clip, text)

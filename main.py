@@ -55,12 +55,12 @@ async def run(niche: str | None = None, upload: bool = True):
         content.script_segments, settings.tts_voice, settings.temp_dir
     )
 
-    footage_paths, audio_paths = await asyncio.gather(footage_task, tts_task)
+    footage_paths, (audio_paths, word_timings) = await asyncio.gather(footage_task, tts_task)
     logger.info(f"Downloaded {len(footage_paths)} clips, {len(audio_paths)} audio files")
 
     # Step 3: Assemble video
     logger.info("=== Assembling video ===")
-    video_path = assemble_video(content, footage_paths, audio_paths, settings)
+    video_path = assemble_video(content, footage_paths, audio_paths, settings, all_word_timings=word_timings)
     logger.info(f"Video saved: {video_path}")
 
     # Step 4: Upload to TikTok
