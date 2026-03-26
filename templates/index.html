@@ -362,6 +362,10 @@
 <div class="header">
     <h1><span>Auto</span> TikTok Video Generator</h1>
     <span class="badge" id="statusBadge">IDLE</span>
+    <button class="btn btn-sm btn-outline" id="notifBtn" onclick="toggleNotif()" style="margin-left:auto;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span id="notifLabel">Notification: OFF</span>
+    </button>
 </div>
 
 <div class="container">
@@ -680,6 +684,11 @@ life tips</textarea>
             batchBtn.disabled = false;
             stopBtn.style.display = 'none';
             loadVideos();
+            if (data.total > 1) {
+                sendNotification('Batch hoàn thành!', `${data.completed}/${data.total} video đã tạo xong`);
+            } else {
+                sendNotification('Video đã tạo xong!', data.status);
+            }
         }
     }
 
@@ -890,7 +899,10 @@ life tips</textarea>
         } else {
             document.getElementById('subStatusDot').className = data.error ? 'status-dot error' : 'status-dot done';
             document.getElementById('subtitleBtn').disabled = false;
-            if (!data.error) loadVideos();
+            if (!data.error) {
+                loadVideos();
+                sendNotification('Phụ đề hoàn thành!', data.status);
+            }
         }
     }
 
@@ -908,10 +920,69 @@ life tips</textarea>
         }).join('');
     }
 
+    // ── Chrome Notifications ──────────────────────────────────────
+    let notifEnabled = false;
+
+    function updateNotifUI() {
+        const btn = document.getElementById('notifBtn');
+        const label = document.getElementById('notifLabel');
+        if (notifEnabled) {
+            label.textContent = 'Notification: ON';
+            btn.style.borderColor = '#00c853';
+            btn.style.color = '#00c853';
+        } else {
+            label.textContent = 'Notification: OFF';
+            btn.style.borderColor = '';
+            btn.style.color = '';
+        }
+    }
+
+    async function toggleNotif() {
+        if (!('Notification' in window)) {
+            alert('Trình duyệt không hỗ trợ Notification');
+            return;
+        }
+        if (Notification.permission === 'denied') {
+            alert('Notification đã bị chặn. Vào Chrome Settings > Site Settings > Notifications > localhost > Allow');
+            return;
+        }
+        if (notifEnabled) {
+            notifEnabled = false;
+            updateNotifUI();
+            return;
+        }
+        const perm = await Notification.requestPermission();
+        notifEnabled = perm === 'granted';
+        updateNotifUI();
+        if (notifEnabled) {
+            new Notification('Auto TikTok', { body: 'Thông báo đã bật!' });
+        }
+    }
+
+    function initNotif() {
+        if ('Notification' in window && Notification.permission === 'granted') {
+            notifEnabled = true;
+        }
+        updateNotifUI();
+    }
+
+    function sendNotification(title, body) {
+        if (!notifEnabled) return;
+        try {
+            const notif = new Notification(title, {
+                body: body,
+                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🎬</text></svg>',
+                tag: 'auto-tiktok',
+            });
+            notif.onclick = () => { window.focus(); notif.close(); };
+        } catch (e) { console.error('Notification error:', e); }
+    }
+
     // ── Init ───────────────────────────────────────────────────────
     document.getElementById('videoModal').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) closeModal();
     });
+    initNotif();
     connectWS();
     loadVoices();
     loadVideos();

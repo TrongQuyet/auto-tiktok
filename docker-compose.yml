@@ -10,6 +10,15 @@ services:
     volumes:
       - ./output:/app/output
       - ./chrome_profile:/app/chrome_profile
+      - ./templates:/app/templates
+      - ./content:/app/content
+      - ./web.py:/app/web.py
+      - ./config.py:/app/config.py
+      - ./main.py:/app/main.py
+      - ./media:/app/media
+      - ./video:/app/video
+      - ./uploader:/app/uploader
+      - ./subtitle:/app/subtitle
     mem_limit: 4g
     memswap_limit: 6g
     # Start web UI by default
