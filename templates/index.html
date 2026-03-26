@@ -430,7 +430,8 @@
                         <div class="form-group">
                             <label>Nguồn</label>
                             <select id="crawlSource" onchange="updateCrawlTopic()">
-                                <option value="reddit">Reddit</option>
+                                <option value="reddit">Reddit (nhiều facts)</option>
+                                <option value="story">Reddit Story (1 câu chuyện)</option>
                                 <option value="wikipedia">Wikipedia</option>
                             </select>
                         </div>
@@ -446,6 +447,14 @@
                                 <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('Jokes')" style="border-color:#fd0;color:#fd0;">Jokes</button>
                                 <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('dadjokes')" style="border-color:#fd0;color:#fd0;">Dad Jokes</button>
                                 <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('AnimalsBeingDerps')" style="border-color:#fd0;color:#fd0;">Animals Derps</button>
+                            </div>
+                            <div style="margin-top:6px; display:none; gap:4px; flex-wrap:wrap;" id="storySuggestions">
+                                <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('tifu')" style="border-color:#f66;color:#f66;">TIFU</button>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('nosleep')" style="border-color:#f66;color:#f66;">Horror</button>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('pettyrevenge')" style="border-color:#f66;color:#f66;">Revenge</button>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('MaliciousCompliance')" style="border-color:#f66;color:#f66;">Compliance</button>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('entitledparents')" style="border-color:#f66;color:#f66;">Entitled Parents</button>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="setCrawlTopic('AmItheAsshole')" style="border-color:#f66;color:#f66;">AITA</button>
                             </div>
                         </div>
                     </div>
@@ -892,17 +901,26 @@ life tips</textarea>
         const source = document.getElementById('crawlSource').value;
         const label = document.getElementById('crawlTopicLabel');
         const input = document.getElementById('crawlTopic');
-        const suggestions = document.getElementById('crawlSuggestions');
+        const redditBtns = document.getElementById('crawlSuggestions');
+        const storyBtns = document.getElementById('storySuggestions');
         if (source === 'reddit') {
             label.textContent = 'Subreddit';
             input.placeholder = 'todayilearned';
             input.value = 'todayilearned';
-            suggestions.style.display = 'flex';
+            redditBtns.style.display = 'flex';
+            storyBtns.style.display = 'none';
+        } else if (source === 'story') {
+            label.textContent = 'Subreddit (câu chuyện dài)';
+            input.placeholder = 'tifu';
+            input.value = 'tifu';
+            redditBtns.style.display = 'none';
+            storyBtns.style.display = 'flex';
         } else {
             label.textContent = 'Wikipedia topic (tiếng Anh)';
             input.placeholder = 'Dogs, Earth, Space...';
             input.value = '';
-            suggestions.style.display = 'none';
+            redditBtns.style.display = 'none';
+            storyBtns.style.display = 'none';
         }
     }
 

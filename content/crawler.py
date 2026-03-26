@@ -61,6 +61,98 @@ def crawl_reddit(subreddit: str = "todayilearned", limit: int = 20) -> list[str]
     return posts
 
 
+STORY_SUBREDDITS = {
+    "tifu": "Today I Messed Up",
+    "nosleep": "Horror Stories",
+    "pettyrevenge": "Petty Revenge",
+    "MaliciousCompliance": "Malicious Compliance",
+    "AmItheAsshole": "Am I The A-hole",
+    "relationship_advice": "Relationship Advice",
+    "entitledparents": "Entitled Parents",
+}
+
+
+def crawl_reddit_story(subreddit: str = "tifu", min_length: int = 200) -> tuple[str, list[str]]:
+    """
+    Crawl ONE full story from a subreddit.
+    Returns (title, paragraphs) where paragraphs are split by author's line breaks.
+    Keeps ALL content intact, no cutting.
+    """
+    url = f"https://www.reddit.com/r/{subreddit}/hot.json"
+    params = {"limit": 25, "t": "week"}
+
+    resp = requests.get(url, headers=REDDIT_HEADERS, params=params, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+
+    # Find a post with long selftext (a real story)
+    import random
+    candidates = []
+    for child in data.get("data", {}).get("children", []):
+        post = child.get("data", {})
+        selftext = post.get("selftext", "").strip()
+        title = post.get("title", "").strip()
+
+        if post.get("stickied") or not selftext or not title:
+            continue
+        if len(selftext) < min_length:
+            continue
+        # Skip removed/deleted posts
+        if selftext in ("[removed]", "[deleted]"):
+            continue
+
+        candidates.append((title, selftext))
+
+    if not candidates:
+        raise RuntimeError(f"No stories found in r/{subreddit}")
+
+    # Pick a random good story
+    title, selftext = random.choice(candidates[:10])
+
+    # Clean up title
+    title = re.sub(r"^TIFU\s+(?:by\s+)?", "", title, flags=re.IGNORECASE).strip()
+
+    # Split by author's paragraph breaks — preserve the story structure
+    raw_paragraphs = selftext.split("\n\n")
+
+    # Clean and merge short paragraphs
+    paragraphs = []
+    buffer = ""
+    for p in raw_paragraphs:
+        p = p.strip()
+        if not p:
+            continue
+        # Remove markdown formatting
+        p = re.sub(r'\*\*(.+?)\*\*', r'\1', p)  # bold
+        p = re.sub(r'\*(.+?)\*', r'\1', p)  # italic
+        p = re.sub(r'~~(.+?)~~', r'\1', p)  # strikethrough
+        p = re.sub(r'\[(.+?)\]\(.+?\)', r'\1', p)  # links
+        p = p.replace("&#x200B;", "").strip()
+
+        if not p:
+            continue
+
+        if len(buffer) > 0 and len(buffer) < 50:
+            # Previous paragraph too short, merge
+            buffer = f"{buffer} {p}"
+        else:
+            if buffer:
+                paragraphs.append(buffer)
+            buffer = p
+
+    if buffer:
+        paragraphs.append(buffer)
+
+    # First segment = title as hook
+    if paragraphs:
+        paragraphs[0] = f"{title}. {paragraphs[0]}"
+    else:
+        paragraphs = [title, selftext[:500]]
+
+    logger.info(f"Story from r/{subreddit}: '{title[:50]}...' ({len(paragraphs)} paragraphs)")
+    return title, paragraphs
+
+
 def crawl_wikipedia(topic: str, sentences: int = 8) -> list[str]:
     """Get summary sentences from Wikipedia API."""
     url = "https://en.wikipedia.org/api/rest_v1/page/summary/" + topic.replace(" ", "_")
@@ -117,6 +209,38 @@ def crawl_and_generate(source: str, topic: str, count: int = 5) -> ContentPlan:
     source: "reddit" or "wikipedia"
     topic: subreddit name (for reddit) or article topic (for wikipedia)
     """
+    if source == "story":
+        subreddit = topic.replace("r/", "").strip()
+        story_title, paragraphs = crawl_reddit_story(subreddit)
+        selected = paragraphs  # Keep ALL paragraphs, no cutting
+        title = story_title
+
+        # Translate
+        vi_texts = translate_to_vi(selected)
+
+        # Search queries from English paragraphs
+        search_queries = []
+        for en_text in selected:
+            words = en_text.split()[:50]
+            skip_w = {"the", "a", "an", "is", "are", "was", "were", "of", "to", "in",
+                      "and", "that", "it", "for", "you", "has", "have", "with", "from",
+                      "this", "not", "but", "can", "been", "than", "more", "its", "my",
+                      "was", "had", "her", "his", "she", "him", "they", "their", "would"}
+            key_words = [w.strip(".,!?()\"'") for w in words if w.lower().strip(".,!?()\"'") not in skip_w and len(w) > 2]
+            query = " ".join(key_words[:3]) if key_words else "people talking"
+            search_queries.append(query)
+
+        hashtags = ["#fyp", "#storytime", "#viral", "#reddit", f"#{subreddit.lower()}", "#trending"]
+        caption = f"Câu chuyện: {story_title[:100]}"
+
+        return ContentPlan(
+            title=title,
+            script_segments=vi_texts,
+            caption=caption[:150],
+            hashtags=hashtags[:7],
+            search_queries=search_queries,
+        )
+
     if source == "reddit":
         subreddit = topic.replace("r/", "").strip()
         english_texts = crawl_reddit(subreddit, limit=20)
