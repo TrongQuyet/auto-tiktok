@@ -13,6 +13,7 @@ class Settings:
     gemini_api_key: str
     pexels_api_key: str
     pixabay_api_key: str
+    coverr_api_key: str
     tiktok_username: str
     tiktok_password: str
     video_width: int
@@ -36,6 +37,7 @@ def load_settings() -> Settings:
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         pexels_api_key=os.getenv("PEXELS_API_KEY", ""),
         pixabay_api_key=os.getenv("PIXABAY_API_KEY", ""),
+        coverr_api_key=os.getenv("COVERR_API_KEY", ""),
         tiktok_username=os.getenv("TIKTOK_USERNAME", ""),
         tiktok_password=os.getenv("TIKTOK_PASSWORD", ""),
         video_width=int(os.getenv("VIDEO_WIDTH", "1080")),

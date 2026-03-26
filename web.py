@@ -15,6 +15,7 @@ from config import load_settings
 from content.script_generator import generate_content
 from media.pexels_client import get_footage_for_segments as pexels_get_footage
 from media.pixabay_client import get_footage_for_segments as pixabay_get_footage
+from media.coverr_client import get_footage_for_segments as coverr_get_footage
 from media.tts import generate_voiceover
 from video.assembler import assemble_video
 
@@ -231,9 +232,11 @@ async def websocket_endpoint(ws: WebSocket):
 
 # ── Helpers ─────────────────────────────────────────────────────────
 def _get_footage(queries: list[str], settings, provider: str, temp_dir):
-    """Route to Pexels or Pixabay based on provider."""
+    """Route to Pexels, Pixabay, or Coverr based on provider."""
     if provider == "pixabay" and settings.pixabay_api_key:
         return pixabay_get_footage(queries, settings.pixabay_api_key, temp_dir)
+    if provider == "coverr" and settings.coverr_api_key:
+        return coverr_get_footage(queries, settings.coverr_api_key, temp_dir)
     return pexels_get_footage(queries, settings.pexels_api_key, temp_dir)
 
 
@@ -347,10 +350,10 @@ async def _run_prompt_video(req: GenerateRequest):
 
         # Generate search queries
         if req.video_provider == "pixabay":
-            # Pixabay supports Vietnamese search - extract key phrases directly
+            # Pixabay supports Vietnamese search
             search_queries = _generate_vi_search_queries(req.segments)
         else:
-            # Pexels needs English queries
+            # Pexels and Coverr need English queries
             search_queries = _generate_search_queries(req.segments)
 
         content = ContentPlan(
