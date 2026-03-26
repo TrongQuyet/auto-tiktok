@@ -230,9 +230,16 @@ def assemble_video(
     transition: str = "fade",
     bgm_style: str = "none",
     sfx_enabled: bool = False,
+    on_progress: callable = None,
 ) -> Path:
     """Build the final TikTok video with optional BGM, transitions, and SFX."""
-    logger.info(f"Assembling: {content.title} (sub={subtitle_style}, trans={transition}, bgm={bgm_style}, sfx={sfx_enabled})")
+    total = len(footage_paths)
+    logger.info(f"Assembling: {content.title} ({total} scenes, sub={subtitle_style}, trans={transition})")
+
+    def report(msg, pct):
+        logger.info(msg)
+        if on_progress:
+            on_progress(msg, pct)
 
     temp_scene_dir = settings.temp_dir / f"scenes_{datetime.now().strftime('%H%M%S')}"
     temp_scene_dir.mkdir(parents=True, exist_ok=True)
@@ -243,7 +250,9 @@ def assemble_video(
         for i, (footage, audio, text) in enumerate(
             zip(footage_paths, audio_paths, content.script_segments)
         ):
-            logger.info(f"Building scene {i + 1}/{len(footage_paths)}")
+            scene_pct = 60 + int((i / total) * 30)  # 60% → 90%
+            report(f"Rendering scene {i + 1}/{total}...", scene_pct)
+
             timings = all_word_timings[i] if all_word_timings and i < len(all_word_timings) else None
             scene = _build_scene(
                 footage, audio, text, settings.video_width, settings.video_height,
@@ -262,9 +271,9 @@ def assemble_video(
             scene.close()
             del scene
             gc.collect()
-            logger.info(f"Scene {i + 1} exported, memory freed")
 
-        # Phase 2: Concat with transitions
+        # Phase 2: Concat
+        report(f"Ghép {total} scenes...", 92)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_path = settings.output_dir / f"video_{timestamp}.mp4"
 
@@ -275,13 +284,15 @@ def assemble_video(
 
         # Phase 3: Add BGM
         if bgm_style and bgm_style != "none":
+            report(f"Thêm nhạc nền ({bgm_style})...", 95)
             _add_bgm(output_path, bgm_style)
 
         # Phase 4: Add SFX
         if sfx_enabled:
+            report("Thêm sound effects...", 97)
             _add_sfx(output_path)
 
-        logger.info(f"Video exported: {output_path}")
+        report(f"Video exported: {output_path}", 99)
         return output_path
 
     finally:

@@ -231,6 +231,21 @@ async def websocket_endpoint(ws: WebSocket):
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
+def _make_progress_callback():
+    """Create a callback for assemble_video to update batch_status from worker thread."""
+    def on_progress(msg, pct):
+        batch_status["status"] = msg
+        batch_status["progress"] = pct
+        # Schedule broadcast on event loop (thread-safe)
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.run_coroutine_threadsafe(_broadcast({"type": "status", **batch_status}), loop)
+        except Exception:
+            pass
+    return on_progress
+
+
 def _get_footage(queries: list[str], settings, provider: str, temp_dir):
     """Route to Pexels, Pixabay, or Coverr based on provider."""
     if provider == "pixabay" and settings.pixabay_api_key:
@@ -390,11 +405,11 @@ async def _run_prompt_video(req: GenerateRequest):
         video_path = await loop.run_in_executor(
             None, assemble_video, content, footage_paths, audio_paths, settings,
             req.subtitle_style, word_timings, req.transition, req.bgm_style, req.sfx_enabled,
+            _make_progress_callback(),
         )
 
         batch_status.update(completed=1, video_path=str(video_path))
 
-        # Upload if requested
         if req.upload_to_tiktok:
             await _run_upload(video_path)
 
@@ -458,6 +473,7 @@ async def _run_crawl_video(req: GenerateRequest):
         video_path = await loop.run_in_executor(
             None, assemble_video, content, footage_paths, audio_paths, settings,
             req.subtitle_style, word_timings, req.transition, req.bgm_style, req.sfx_enabled,
+            _make_progress_callback(),
         )
 
         batch_status.update(completed=1, video_path=str(video_path))
@@ -514,6 +530,7 @@ async def _create_single_video(video_num: int, niche: str, settings, tts_voice: 
         video_path = await loop.run_in_executor(
             None, assemble_video, content, footage_paths, audio_paths, settings,
             subtitle_style, word_timings, transition, bgm_style, sfx_enabled,
+            _make_progress_callback(),
         )
         logger.info(f"[Video {video_num}] Done! -> {video_path}")
         return video_path
