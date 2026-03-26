@@ -389,6 +389,7 @@
                 <div class="tab active" onclick="switchTab('single')">Single Video</div>
                 <div class="tab" onclick="switchTab('batch')">Batch Generate</div>
                 <div class="tab" onclick="switchTab('subtitle')">Phụ Đề</div>
+                <div class="tab" onclick="switchTab('cloner')">Clone Web</div>
             </div>
 
             <!-- Single Video Tab -->
@@ -690,6 +691,83 @@ life tips</textarea>
                 </div>
             </div>
 
+            <!-- Clone Website Tab -->
+            <div class="tab-content" id="tab-cloner">
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>URL Website</label>
+                        <input type="text" id="cloneUrl" placeholder="https://example.com" value="">
+                    </div>
+                    <div class="form-row">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cloneJs" checked>
+                            <label for="cloneJs">JavaScript</label>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="cloneImages" checked>
+                            <label for="cloneImages">Images</label>
+                        </div>
+                    </div>
+                    <div class="checkbox-group" style="margin-bottom:16px;">
+                        <input type="checkbox" id="cloneFonts" checked>
+                        <label for="cloneFonts">Fonts</label>
+                    </div>
+                    <button class="btn btn-primary" id="cloneBtn" onclick="startClone()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                        Clone Website
+                    </button>
+
+                    <!-- Clone Progress -->
+                    <div id="cloneProgressArea" style="display:none; margin-top:16px;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="cloneProgressFill"></div>
+                        </div>
+                        <div class="progress-text">
+                            <span class="status-dot running" id="cloneStatusDot"></span>
+                            <span id="cloneStatusText">Starting...</span>
+                        </div>
+                        <div class="batch-stats" id="cloneStats" style="display:grid; margin-top:10px;">
+                            <div class="stat-box">
+                                <div class="stat-value" id="cloneStatCss">0</div>
+                                <div class="stat-label">CSS</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-value" id="cloneStatJs">0</div>
+                                <div class="stat-label">JS</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-value" id="cloneStatImages">0</div>
+                                <div class="stat-label">Images</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-value" id="cloneStatFonts">0</div>
+                                <div class="stat-label">Fonts</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Clone Result -->
+                    <div id="cloneResult" style="display:none; margin-top:16px;">
+                        <div style="display:flex; gap:8px;">
+                            <a class="btn btn-primary" id="cloneDownloadBtn" href="#" download style="flex:1; text-align:center; text-decoration:none;">
+                                Download ZIP
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clone Library -->
+                <div class="card-body" style="border-top:1px solid var(--border);">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                        <strong style="font-size:14px;">Cloned Sites</strong>
+                        <button class="btn btn-sm btn-outline" onclick="loadClones()" style="margin-left:auto;">Refresh</button>
+                    </div>
+                    <div id="cloneListArea">
+                        <div class="empty-state" style="padding:10px 0;"><p style="font-size:13px;">Chưa có site nào được clone.</p></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Progress + Stats (shared) -->
             <div class="card-body" id="progressArea" style="display:none; border-top: 1px solid var(--border);">
                 <div class="progress-bar">
@@ -785,7 +863,7 @@ life tips</textarea>
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(`tab-${tab}`).classList.add('active');
-        const idx = {single: 1, batch: 2, subtitle: 3}[tab] || 1;
+        const idx = {single: 1, batch: 2, subtitle: 3, cloner: 4}[tab] || 1;
         document.querySelector(`.tab:nth-child(${idx})`).classList.add('active');
     }
 
@@ -810,6 +888,7 @@ life tips</textarea>
             if (data.type === 'content') showContentPreview(data);
             if (data.type === 'subtitle_status') updateSubtitleStatus(data);
             if (data.type === 'subtitle_preview') showSubtitlePreview(data);
+            if (data.type === 'clone_status') updateCloneStatus(data);
         };
     }
 
@@ -1263,6 +1342,100 @@ life tips</textarea>
         } catch (e) { console.error('Notification error:', e); }
     }
 
+    // ── Clone Website Feature ─────────────────────────────────────
+    async function startClone() {
+        const url = document.getElementById('cloneUrl').value.trim();
+        if (!url) return alert('Vui lòng nhập URL website');
+        if (!url.startsWith('http://') && !url.startsWith('https://'))
+            return alert('URL phải bắt đầu bằng http:// hoặc https://');
+
+        document.getElementById('cloneBtn').disabled = true;
+        document.getElementById('cloneResult').style.display = 'none';
+
+        const body = {
+            url,
+            include_js: document.getElementById('cloneJs').checked,
+            include_images: document.getElementById('cloneImages').checked,
+            include_fonts: document.getElementById('cloneFonts').checked,
+        };
+
+        const res = await fetch('/api/clone', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.error) {
+            alert(data.error);
+            document.getElementById('cloneBtn').disabled = false;
+        }
+    }
+
+    function updateCloneStatus(data) {
+        const area = document.getElementById('cloneProgressArea');
+        area.style.display = 'block';
+        document.getElementById('cloneProgressFill').style.width = data.progress + '%';
+        document.getElementById('cloneStatusText').textContent = data.status;
+
+        // Update stats
+        if (data.stats) {
+            document.getElementById('cloneStatCss').textContent = data.stats.css || 0;
+            document.getElementById('cloneStatJs').textContent = data.stats.js || 0;
+            document.getElementById('cloneStatImages').textContent = data.stats.images || 0;
+            document.getElementById('cloneStatFonts').textContent = data.stats.fonts || 0;
+        }
+
+        if (data.running) {
+            document.getElementById('cloneStatusDot').className = 'status-dot running';
+            document.getElementById('cloneBtn').disabled = true;
+        } else {
+            document.getElementById('cloneStatusDot').className = data.error ? 'status-dot error' : 'status-dot done';
+            document.getElementById('cloneBtn').disabled = false;
+
+            if (!data.error && data.zip_filename) {
+                const result = document.getElementById('cloneResult');
+                result.style.display = 'block';
+                document.getElementById('cloneDownloadBtn').href = `/api/clone/download/${data.zip_filename}`;
+                loadClones();
+                sendNotification('Clone hoàn thành!', data.status);
+            }
+        }
+    }
+
+    async function loadClones() {
+        try {
+            const res = await fetch('/api/clone/list');
+            const clones = await res.json();
+            const area = document.getElementById('cloneListArea');
+
+            if (!clones.length) {
+                area.innerHTML = '<div class="empty-state" style="padding:10px 0;"><p style="font-size:13px;">Chưa có site nào được clone.</p></div>';
+                return;
+            }
+
+            area.innerHTML = `<ul class="video-list">${clones.map(c => `
+                <li class="video-item">
+                    <div class="video-info" style="flex:1;">
+                        <h4 style="font-size:13px;">${c.name}</h4>
+                        <span>${c.size_mb} MB &middot; ${c.created}</span>
+                    </div>
+                    <div class="video-actions">
+                        <a class="btn btn-sm btn-outline" href="${c.url}" download>Download</a>
+                        <button class="btn btn-sm btn-danger" onclick="deleteClone('${c.name}')">Xóa</button>
+                    </div>
+                </li>
+            `).join('')}</ul>`;
+        } catch (e) { console.error('Failed to load clones:', e); }
+    }
+
+    async function deleteClone(filename) {
+        if (!confirm(`Xóa "${filename}"?`)) return;
+        const res = await fetch(`/api/clone/${filename}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.error) alert(data.error);
+        else loadClones();
+    }
+
     // ── Init ───────────────────────────────────────────────────────
     document.getElementById('videoModal').addEventListener('click', (e) => {
         if (e.target === e.currentTarget) closeModal();
@@ -1271,6 +1444,7 @@ life tips</textarea>
     connectWS();
     loadVoices();
     loadVideos();
+    loadClones();
 </script>
 </body>
 </html>

@@ -19,6 +19,7 @@ services:
       - ./video:/app/video
       - ./uploader:/app/uploader
       - ./subtitle:/app/subtitle
+      - ./cloner:/app/cloner
     mem_limit: 4g
     memswap_limit: 6g
     # Start web UI by default

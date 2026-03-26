@@ -11,6 +11,9 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from cloner.fetcher import clone_website
+from cloner.packager import cleanup, package_zip
+from cloner.utils import get_domain, is_private_ip
 from config import load_settings
 from content.script_generator import generate_content
 from media.pexels_client import get_footage_for_segments as pexels_get_footage
@@ -74,6 +77,13 @@ class GenerateRequest(BaseModel):
     hashtags: list[str] | None = None
     crawl_source: str = "reddit"  # "reddit" or "wikipedia"
     crawl_topic: str = "todayilearned"
+
+
+class CloneRequest(BaseModel):
+    url: str
+    include_js: bool = True
+    include_images: bool = True
+    include_fonts: bool = True
 
 
 class BatchRequest(BaseModel):
@@ -789,3 +799,140 @@ async def _run_subtitle(
     # Cleanup uploaded file if it was in temp
     if "temp/uploads" in str(input_path):
         input_path.unlink(missing_ok=True)
+
+
+# ── Website Cloner Feature ────────────────────────────────────────
+clone_status = {
+    "running": False,
+    "status": "idle",
+    "progress": 0,
+    "output_path": None,
+    "zip_filename": None,
+    "error": None,
+    "stats": {"css": 0, "js": 0, "images": 0, "fonts": 0, "failed": 0},
+}
+
+
+@app.get("/api/clone/status")
+async def get_clone_status():
+    return clone_status
+
+
+@app.post("/api/clone")
+async def start_clone(req: CloneRequest):
+    if clone_status["running"]:
+        return {"error": "A clone job is already running"}
+
+    # Validate URL
+    if not req.url.startswith(("http://", "https://")):
+        return {"error": "URL must start with http:// or https://"}
+
+    if is_private_ip(req.url):
+        return {"error": "Cannot clone private/internal URLs"}
+
+    asyncio.create_task(_run_clone(req))
+    return {"message": "Clone started", "url": req.url}
+
+
+@app.get("/api/clone/download/{filename}")
+async def download_clone(filename: str):
+    path = Path("output/cloned") / filename
+    if not path.exists() or not path.suffix == ".zip":
+        return {"error": "File not found"}
+    return FileResponse(path, media_type="application/zip", filename=filename)
+
+
+@app.get("/api/clone/list")
+async def list_clones():
+    clone_dir = Path("output/cloned")
+    clones = []
+    if clone_dir.exists():
+        for f in sorted(clone_dir.glob("*.zip"), key=os.path.getmtime, reverse=True):
+            stat = f.stat()
+            clones.append({
+                "name": f.name,
+                "size_mb": round(stat.st_size / (1024 * 1024), 1),
+                "created": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                "url": f"/api/clone/download/{f.name}",
+            })
+    return clones
+
+
+@app.delete("/api/clone/{filename}")
+async def delete_clone(filename: str):
+    path = Path("output/cloned") / filename
+    if not path.exists():
+        return {"error": "File not found"}
+    path.unlink()
+    # Also remove the extracted directory if it exists
+    dir_path = path.with_suffix("")
+    if dir_path.exists() and dir_path.is_dir():
+        shutil.rmtree(dir_path, ignore_errors=True)
+    logger.info(f"Deleted clone: {filename}")
+    return {"message": f"Deleted {filename}"}
+
+
+async def _run_clone(req: CloneRequest):
+    clone_status.update(
+        running=True, status="Starting...", progress=0,
+        output_path=None, zip_filename=None, error=None,
+        stats={"css": 0, "js": 0, "images": 0, "fonts": 0, "failed": 0},
+    )
+    await _broadcast({"type": "clone_status", **clone_status})
+
+    try:
+        loop = asyncio.get_event_loop()
+        domain = get_domain(req.url)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        job_name = f"{domain}_{timestamp}"
+
+        clone_dir = Path("output/cloned") / job_name
+        zip_path = Path("output/cloned") / f"{job_name}.zip"
+        Path("output/cloned").mkdir(parents=True, exist_ok=True)
+
+        def progress_callback(msg, pct):
+            clone_status["status"] = msg
+            clone_status["progress"] = pct
+            try:
+                if loop.is_running():
+                    asyncio.run_coroutine_threadsafe(
+                        _broadcast({"type": "clone_status", **clone_status}), loop
+                    )
+            except Exception:
+                pass
+
+        # Run clone in executor (blocking I/O)
+        result = await loop.run_in_executor(
+            None, clone_website, req.url, clone_dir,
+            req.include_js, req.include_images, req.include_fonts,
+            progress_callback,
+        )
+
+        # Update stats
+        clone_status["stats"] = {
+            "css": result.css_count,
+            "js": result.js_count,
+            "images": result.image_count,
+            "fonts": result.font_count,
+            "failed": len(result.failed_assets),
+        }
+
+        # Package ZIP
+        clone_status.update(status="Creating ZIP...", progress=98)
+        await _broadcast({"type": "clone_status", **clone_status})
+        await loop.run_in_executor(None, package_zip, clone_dir, zip_path)
+
+        # Cleanup extracted directory
+        cleanup(clone_dir)
+
+        clone_status.update(
+            running=False, status="Done!", progress=100,
+            output_path=str(zip_path), zip_filename=f"{job_name}.zip",
+        )
+        logger.info(f"Clone complete: {zip_path}")
+
+    except Exception as e:
+        logger.error(f"Clone error: {e}")
+        clone_status.update(running=False, status=f"Error: {e}", progress=0, error=str(e))
+
+    await _broadcast({"type": "clone_status", **clone_status})
