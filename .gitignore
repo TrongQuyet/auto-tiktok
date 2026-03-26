@@ -9,3 +9,4 @@ chrome_profile/
 *.mp4
 *.mp3
 *.wav
+.claude/
