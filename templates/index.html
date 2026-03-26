@@ -424,11 +424,21 @@
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label>TTS Voice</label>
+                        <select id="voiceSelect">
+                            <option value="">Default (from .env)</option>
+                        </select>
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>TTS Voice</label>
-                            <select id="voiceSelect">
-                                <option value="">Default (from .env)</option>
+                            <label>Tốc độ đọc</label>
+                            <select id="ttsRate">
+                                <option value="-20%">Chậm (-20%)</option>
+                                <option value="+0%" selected>Bình thường</option>
+                                <option value="+15%">Hơi nhanh (+15%)</option>
+                                <option value="+30%">Nhanh (+30%)</option>
+                                <option value="+50%">Rất nhanh (+50%)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -543,11 +553,21 @@ life tips</textarea>
                             <input type="number" id="batchWorkers" value="2" min="1" max="4">
                         </div>
                     </div>
+                    <div class="form-group">
+                        <label>TTS Voice</label>
+                        <select id="batchVoiceSelect">
+                            <option value="">Default (from .env)</option>
+                        </select>
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>TTS Voice</label>
-                            <select id="batchVoiceSelect">
-                                <option value="">Default (from .env)</option>
+                            <label>Tốc độ đọc</label>
+                            <select id="batchTtsRate">
+                                <option value="-20%">Chậm (-20%)</option>
+                                <option value="+0%" selected>Bình thường</option>
+                                <option value="+15%">Hơi nhanh (+15%)</option>
+                                <option value="+30%">Nhanh (+30%)</option>
+                                <option value="+50%">Rất nhanh (+50%)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -787,6 +807,7 @@ life tips</textarea>
         let body;
 
         const subtitleStyle = document.getElementById('subtitleStyle').value;
+        const ttsRate = document.getElementById('ttsRate').value;
 
         if (currentMode === 'prompt') {
             const promptText = document.getElementById('promptInput').value.trim();
@@ -806,6 +827,7 @@ life tips</textarea>
                 hashtags: hashtags,
                 upload_to_tiktok: uploadToTiktok,
                 subtitle_style: subtitleStyle,
+                tts_rate: ttsRate,
             };
         } else {
             const niche = document.getElementById('nicheInput').value.trim();
@@ -814,6 +836,7 @@ life tips</textarea>
                 niche: niche,
                 upload_to_tiktok: uploadToTiktok,
                 subtitle_style: subtitleStyle,
+                tts_rate: ttsRate,
             };
         }
 
@@ -842,6 +865,7 @@ life tips</textarea>
             count: Math.min(Math.max(count, 1), 20),
             workers: Math.min(Math.max(workers, 1), 4),
             subtitle_style: document.getElementById('batchSubtitleStyle').value,
+            tts_rate: document.getElementById('batchTtsRate').value,
             upload_to_tiktok: document.getElementById('batchUploadCheck').checked,
         };
         const voice = document.getElementById('batchVoiceSelect').value;

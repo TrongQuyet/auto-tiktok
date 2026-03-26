@@ -60,8 +60,9 @@ class GenerateRequest(BaseModel):
     niche: str = "motivation"
     upload_to_tiktok: bool = False
     tts_voice: str | None = None
-    subtitle_style: str = "karaoke"  # "static" or "karaoke"
-    mode: str = "niche"  # "niche" or "prompt"
+    tts_rate: str = "+0%"
+    subtitle_style: str = "karaoke"
+    mode: str = "niche"
     segments: list[str] | None = None
     caption: str | None = None
     hashtags: list[str] | None = None
@@ -72,6 +73,7 @@ class BatchRequest(BaseModel):
     count: int = 1
     workers: int = 1
     subtitle_style: str = "karaoke"
+    tts_rate: str = "+0%"
     upload_to_tiktok: bool = False
     tts_voice: str | None = None
 
@@ -150,6 +152,7 @@ async def generate(req: GenerateRequest):
         workers=1,
         upload_to_tiktok=req.upload_to_tiktok,
         tts_voice=req.tts_voice,
+        tts_rate=req.tts_rate,
         subtitle_style=req.subtitle_style,
     )
     asyncio.create_task(_run_batch(batch_req))
@@ -329,7 +332,7 @@ async def _run_prompt_video(req: GenerateRequest):
         footage_task = loop.run_in_executor(
             None, get_footage_for_segments, content.search_queries, settings.pexels_api_key, temp_dir
         )
-        tts_task = generate_voiceover(content.script_segments, settings.tts_voice, temp_dir)
+        tts_task = generate_voiceover(content.script_segments, settings.tts_voice, temp_dir, rate=req.tts_rate)
         footage_paths, (audio_paths, word_timings) = await asyncio.gather(footage_task, tts_task)
 
         # Assemble
@@ -356,7 +359,7 @@ async def _run_prompt_video(req: GenerateRequest):
         await _broadcast({"type": "status", **batch_status})
 
 
-async def _create_single_video(video_num: int, niche: str, settings, tts_voice: str | None, subtitle_style: str = "karaoke") -> Path | None:
+async def _create_single_video(video_num: int, niche: str, settings, tts_voice: str | None, subtitle_style: str = "karaoke", tts_rate: str = "+0%") -> Path | None:
     """Create a single video. Returns output path or None on failure."""
     if tts_voice:
         settings.tts_voice = tts_voice
@@ -386,7 +389,7 @@ async def _create_single_video(video_num: int, niche: str, settings, tts_voice: 
         footage_task = loop.run_in_executor(
             None, get_footage_for_segments, content.search_queries, settings.pexels_api_key, temp_dir
         )
-        tts_task = generate_voiceover(content.script_segments, settings.tts_voice, temp_dir)
+        tts_task = generate_voiceover(content.script_segments, settings.tts_voice, temp_dir, rate=tts_rate)
         footage_paths, (audio_paths, word_timings) = await asyncio.gather(footage_task, tts_task)
 
         # Step 3: Assemble video
@@ -415,7 +418,7 @@ async def _worker(semaphore: asyncio.Semaphore, video_num: int, niche: str, sett
         batch_status["progress"] = int((batch_status["completed"] / batch_status["total"]) * 100)
         await _broadcast({"type": "status", **batch_status})
 
-        result = await _create_single_video(video_num, niche, settings, req.tts_voice, req.subtitle_style)
+        result = await _create_single_video(video_num, niche, settings, req.tts_voice, req.subtitle_style, req.tts_rate)
 
         if result:
             batch_status["completed"] += 1

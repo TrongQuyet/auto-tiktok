@@ -7,13 +7,13 @@ import edge_tts
 logger = logging.getLogger(__name__)
 
 
-async def generate_single(text: str, voice: str, output_path: Path) -> tuple[Path, list[dict]]:
+async def generate_single(text: str, voice: str, output_path: Path, rate: str = "+0%") -> tuple[Path, list[dict]]:
     """
     Generate TTS audio and capture word-level timestamps.
-    Returns (audio_path, word_timings) where word_timings is:
-    [{"word": "Bạn", "start": 0.0, "end": 0.35}, ...]
+    rate: speed adjustment, e.g. "+0%", "+20%", "+50%", "-10%"
+    Returns (audio_path, word_timings)
     """
-    communicate = edge_tts.Communicate(text, voice)
+    communicate = edge_tts.Communicate(text, voice, rate=rate)
     word_timings = []
 
     with open(output_path, "wb") as f:
@@ -34,7 +34,7 @@ async def generate_single(text: str, voice: str, output_path: Path) -> tuple[Pat
 
 
 async def generate_voiceover(
-    segments: list[str], voice: str, temp_dir: Path
+    segments: list[str], voice: str, temp_dir: Path, rate: str = "+0%"
 ) -> tuple[list[Path], list[list[dict]]]:
     """
     Generate voiceover for all segments.
@@ -44,7 +44,7 @@ async def generate_voiceover(
     all_timings = []
     for i, segment in enumerate(segments):
         output_path = temp_dir / f"audio_{i}.mp3"
-        audio_path, timings = await generate_single(segment, voice, output_path)
+        audio_path, timings = await generate_single(segment, voice, output_path, rate=rate)
         paths.append(audio_path)
         all_timings.append(timings)
 
