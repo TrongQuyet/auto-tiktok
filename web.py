@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from affiliate.content_generator import generate_platform_content
 from cloner.fetcher import clone_website
 from cloner.packager import cleanup, package_zip
 from cloner.utils import get_domain, is_private_ip
@@ -98,6 +99,22 @@ class BatchRequest(BaseModel):
     sfx_enabled: bool = False
     upload_to_tiktok: bool = False
     tts_voice: str | None = None
+
+
+class AffiliateGenerateRequest(BaseModel):
+    affiliate_url: str
+    product_name: str
+    product_description: str
+    platforms: list[str] = ["facebook", "twitter"]
+
+
+class AffiliatePostRequest(BaseModel):
+    affiliate_url: str
+    product_name: str
+    contents: dict[str, str]  # {platform: content}
+    subreddits: list[str] = []
+    delay_min: int = 30
+    delay_max: int = 90
 
 
 # ── API Endpoints ───────────────────────────────────────────────────
@@ -227,6 +244,103 @@ async def upload_to_tiktok(filename: str):
 
     asyncio.create_task(_run_upload(path))
     return {"message": "Upload started"}
+
+
+# ── Affiliate Feature ───────────────────────────────────────────────
+affiliate_status = {
+    "running": False,
+    "platforms": {},  # {platform: "pending"|"posting"|"success"|"failed"}
+    "errors": {},
+}
+
+
+@app.post("/api/affiliate/generate")
+async def affiliate_generate(req: AffiliateGenerateRequest):
+    settings = load_settings()
+    try:
+        content = await generate_platform_content(
+            req.affiliate_url,
+            req.product_name,
+            req.product_description,
+            req.platforms,
+            settings,
+        )
+        return {"content": content}
+    except Exception as e:
+        logger.error(f"Affiliate generate failed: {e}")
+        return {"error": str(e)}
+
+
+@app.post("/api/affiliate/post")
+async def affiliate_post(req: AffiliatePostRequest):
+    if affiliate_status["running"]:
+        return {"error": "Đang rải, vui lòng chờ..."}
+    asyncio.create_task(_run_affiliate_post(req))
+    return {"message": "Bắt đầu rải link", "platforms": list(req.contents.keys())}
+
+
+@app.get("/api/affiliate/status")
+async def get_affiliate_status():
+    return affiliate_status
+
+
+async def _run_affiliate_post(req: AffiliatePostRequest):
+    import random as _random
+    from affiliate.platforms.facebook import post_to_facebook
+    from affiliate.platforms.twitter import post_to_twitter
+    from affiliate.platforms.reddit import post_to_reddit
+    from affiliate.platforms.instagram import post_to_instagram
+
+    affiliate_status["running"] = True
+    affiliate_status["platforms"] = {p: "pending" for p in req.contents}
+    affiliate_status["errors"] = {}
+    settings = load_settings()
+
+    platform_order = list(req.contents.keys())
+
+    for i, platform in enumerate(platform_order):
+        affiliate_status["platforms"][platform] = "posting"
+        await _broadcast({"type": "affiliate_status", **affiliate_status})
+        logger.info(f"Posting to {platform}...")
+
+        try:
+            content = req.contents[platform]
+
+            if platform == "facebook":
+                result = await post_to_facebook(content, settings)
+            elif platform == "twitter":
+                result = await post_to_twitter(content, req.affiliate_url, settings)
+            elif platform == "reddit":
+                result = await post_to_reddit(content, req.subreddits, settings)
+            elif platform == "instagram":
+                result = await post_to_instagram(content, settings)
+            else:
+                result = {"success": False, "platform": platform, "error": "Platform không được hỗ trợ"}
+
+            if result["success"]:
+                affiliate_status["platforms"][platform] = "success"
+                logger.info(f"{platform}: post thành công")
+            else:
+                affiliate_status["platforms"][platform] = "failed"
+                affiliate_status["errors"][platform] = result.get("error", "Unknown error")
+                logger.error(f"{platform}: post thất bại — {result.get('error')}")
+
+        except Exception as e:
+            affiliate_status["platforms"][platform] = "failed"
+            affiliate_status["errors"][platform] = str(e)
+            logger.error(f"{platform} exception: {e}")
+
+        await _broadcast({"type": "affiliate_status", **affiliate_status})
+
+        # Delay between posts (except after last one)
+        if i < len(platform_order) - 1:
+            delay = _random.randint(req.delay_min, req.delay_max)
+            logger.info(f"Chờ {delay}s trước khi post tiếp...")
+            await asyncio.sleep(delay)
+
+    affiliate_status["running"] = False
+    await _broadcast({"type": "affiliate_status", **affiliate_status})
+    logger.info("Rải link hoàn tất!")
 
 
 @app.websocket("/ws")

@@ -25,6 +25,13 @@ class Settings:
     temp_dir: Path
     chrome_profile_dir: Path
     default_niche: str
+    reddit_client_id: str
+    reddit_client_secret: str
+    reddit_username: str
+    reddit_password: str
+    reddit_user_agent: str
+    affiliate_post_delay_min: int
+    affiliate_post_delay_max: int
 
 
 def load_settings() -> Settings:
@@ -49,6 +56,13 @@ def load_settings() -> Settings:
         temp_dir=Path(os.getenv("TEMP_DIR", "./temp")),
         chrome_profile_dir=Path(os.getenv("CHROME_PROFILE_DIR", "./chrome_profile")),
         default_niche=os.getenv("DEFAULT_NICHE", "motivation"),
+        reddit_client_id=os.getenv("REDDIT_CLIENT_ID", ""),
+        reddit_client_secret=os.getenv("REDDIT_CLIENT_SECRET", ""),
+        reddit_username=os.getenv("REDDIT_USERNAME", ""),
+        reddit_password=os.getenv("REDDIT_PASSWORD", ""),
+        reddit_user_agent=os.getenv("REDDIT_USER_AGENT", "AffiliateBot/1.0"),
+        affiliate_post_delay_min=int(os.getenv("AFFILIATE_POST_DELAY_MIN", "30")),
+        affiliate_post_delay_max=int(os.getenv("AFFILIATE_POST_DELAY_MAX", "90")),
     )
 
     # Validate required keys based on provider

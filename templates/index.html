@@ -390,6 +390,7 @@
                 <div class="tab" onclick="switchTab('batch')">Batch Generate</div>
                 <div class="tab" onclick="switchTab('subtitle')">Phụ Đề</div>
                 <div class="tab" onclick="switchTab('cloner')">Clone Web</div>
+                <div class="tab" onclick="switchTab('affiliate')">🔗 Affiliate</div>
             </div>
 
             <!-- Single Video Tab -->
@@ -768,6 +769,81 @@ life tips</textarea>
                 </div>
             </div>
 
+            <!-- Affiliate Tab -->
+            <div class="tab-content" id="tab-affiliate">
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>Link Affiliate</label>
+                        <input type="url" id="affUrl" placeholder="https://shopee.vn/product/... hoặc Amazon link...">
+                    </div>
+                    <div class="form-group">
+                        <label>Tên sản phẩm</label>
+                        <input type="text" id="affName" placeholder="Ví dụ: Tai nghe Sony WH-1000XM5">
+                    </div>
+                    <div class="form-group">
+                        <label>Mô tả ngắn</label>
+                        <textarea id="affDesc" rows="3" style="width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;outline:none;resize:vertical;" placeholder="Ví dụ: Tai nghe chống ồn cao cấp, pin 30 giờ, âm thanh Hi-Res, phù hợp làm việc và du lịch..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Chọn Platform</label>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+                            <div class="checkbox-group" style="margin:0;">
+                                <input type="checkbox" id="plt-facebook" value="facebook" checked>
+                                <label for="plt-facebook">📘 Facebook</label>
+                            </div>
+                            <div class="checkbox-group" style="margin:0;">
+                                <input type="checkbox" id="plt-twitter" value="twitter" checked>
+                                <label for="plt-twitter">🐦 Twitter/X</label>
+                            </div>
+                            <div class="checkbox-group" style="margin:0;">
+                                <input type="checkbox" id="plt-instagram" value="instagram">
+                                <label for="plt-instagram">📸 Instagram</label>
+                            </div>
+                            <div class="checkbox-group" style="margin:0;">
+                                <input type="checkbox" id="plt-reddit" value="reddit">
+                                <label for="plt-reddit">🤖 Reddit</label>
+                            </div>
+                            <div class="checkbox-group" style="margin:0;">
+                                <input type="checkbox" id="plt-tiktok" value="tiktok">
+                                <label for="plt-tiktok">🎵 TikTok</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="redditSubGroup" style="display:none;">
+                        <label>Subreddits (cách nhau bằng dấu phẩy)</label>
+                        <input type="text" id="affSubreddits" placeholder="ví dụ: ProductReviews, BuyItForLife, Frugal">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Delay tối thiểu (giây)</label>
+                            <input type="number" id="delayMin" value="30" min="10" max="300">
+                        </div>
+                        <div class="form-group">
+                            <label>Delay tối đa (giây)</label>
+                            <input type="number" id="delayMax" value="90" min="10" max="600">
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" id="affGenBtn" onclick="generateAffContent()" style="margin-bottom:8px;">
+                        ✨ Tạo Content AI
+                    </button>
+                    <button class="btn btn-primary" id="affPostBtn" onclick="postAffiliate()" style="display:none;background:var(--success);">
+                        🚀 Rải Ngay
+                    </button>
+                </div>
+
+                <!-- Content Preview Area -->
+                <div id="affPreviewArea" style="display:none;">
+                    <div style="padding:0 20px 4px;font-size:13px;color:var(--text2);font-weight:600;border-top:1px solid var(--border);padding-top:16px;">
+                        📝 Preview Content — Chỉnh sửa trước khi rải
+                    </div>
+                    <div id="affPreviews" style="padding:12px 20px 20px;display:flex;flex-direction:column;gap:16px;"></div>
+                </div>
+            </div>
+
             <!-- Progress + Stats (shared) -->
             <div class="card-body" id="progressArea" style="display:none; border-top: 1px solid var(--border);">
                 <div class="progress-bar">
@@ -863,7 +939,7 @@ life tips</textarea>
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         document.getElementById(`tab-${tab}`).classList.add('active');
-        const idx = {single: 1, batch: 2, subtitle: 3, cloner: 4}[tab] || 1;
+        const idx = {single: 1, batch: 2, subtitle: 3, cloner: 4, affiliate: 5}[tab] || 1;
         document.querySelector(`.tab:nth-child(${idx})`).classList.add('active');
     }
 
@@ -889,6 +965,7 @@ life tips</textarea>
             if (data.type === 'subtitle_status') updateSubtitleStatus(data);
             if (data.type === 'subtitle_preview') showSubtitlePreview(data);
             if (data.type === 'clone_status') updateCloneStatus(data);
+            if (data.type === 'affiliate_status') updateAffiliateStatus(data);
         };
     }
 
@@ -1434,6 +1511,139 @@ life tips</textarea>
         const data = await res.json();
         if (data.error) alert(data.error);
         else loadClones();
+    }
+
+    // ── Affiliate ──────────────────────────────────────────────────
+    document.querySelectorAll('[id^="plt-"]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            document.getElementById('redditSubGroup').style.display =
+                document.getElementById('plt-reddit').checked ? 'block' : 'none';
+        });
+    });
+
+    function getSelectedPlatforms() {
+        return [...document.querySelectorAll('[id^="plt-"]:checked')].map(c => c.value);
+    }
+
+    let affGeneratedContent = {};
+
+    async function generateAffContent() {
+        const url = document.getElementById('affUrl').value.trim();
+        const name = document.getElementById('affName').value.trim();
+        const desc = document.getElementById('affDesc').value.trim();
+        const platforms = getSelectedPlatforms();
+
+        if (!url || !name) { alert('Vui lòng nhập Link Affiliate và Tên sản phẩm'); return; }
+        if (platforms.length === 0) { alert('Vui lòng chọn ít nhất một platform'); return; }
+
+        const btn = document.getElementById('affGenBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Đang tạo content...';
+        document.getElementById('affPreviewArea').style.display = 'none';
+        document.getElementById('affPostBtn').style.display = 'none';
+
+        try {
+            const resp = await fetch('/api/affiliate/generate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({affiliate_url: url, product_name: name, product_description: desc, platforms})
+            });
+            const data = await resp.json();
+            if (data.error) { alert('Lỗi: ' + data.error); return; }
+
+            affGeneratedContent = data.content;
+            renderAffiliatePreviews(affGeneratedContent);
+            document.getElementById('affPreviewArea').style.display = 'block';
+            document.getElementById('affPostBtn').style.display = 'block';
+        } catch (e) {
+            alert('Lỗi kết nối: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '✨ Tạo Content AI';
+        }
+    }
+
+    const PLATFORM_LABELS = {
+        facebook: '📘 Facebook',
+        twitter: '🐦 Twitter/X',
+        instagram: '📸 Instagram',
+        reddit: '🤖 Reddit',
+        tiktok: '🎵 TikTok',
+    };
+
+    function renderAffiliatePreviews(content) {
+        const container = document.getElementById('affPreviews');
+        container.innerHTML = '';
+        for (const [platform, text] of Object.entries(content)) {
+            const div = document.createElement('div');
+            div.style = 'background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;';
+            div.innerHTML = `
+                <div style="padding:10px 14px;background:var(--surface2);font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center;">
+                    <span>${PLATFORM_LABELS[platform] || platform}</span>
+                    <span id="aff-status-${platform}" style="font-size:12px;color:var(--text2);">Chưa post</span>
+                </div>
+                <textarea id="aff-content-${platform}" rows="6" style="width:100%;padding:12px 14px;background:transparent;border:none;color:var(--text);font-size:13px;outline:none;resize:vertical;font-family:inherit;">${text}</textarea>
+            `;
+            container.appendChild(div);
+        }
+    }
+
+    async function postAffiliate() {
+        const url = document.getElementById('affUrl').value.trim();
+        const delayMin = parseInt(document.getElementById('delayMin').value) || 30;
+        const delayMax = parseInt(document.getElementById('delayMax').value) || 90;
+        const subredditsInput = document.getElementById('affSubreddits').value;
+        const subreddits = subredditsInput.split(',').map(s => s.trim()).filter(Boolean);
+
+        // Collect current content from textareas (user may have edited)
+        const contents = {};
+        for (const platform of Object.keys(affGeneratedContent)) {
+            const ta = document.getElementById(`aff-content-${platform}`);
+            if (ta) contents[platform] = ta.value;
+        }
+
+        if (Object.keys(contents).length === 0) { alert('Không có content để post'); return; }
+
+        const btn = document.getElementById('affPostBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Đang rải...';
+
+        try {
+            const resp = await fetch('/api/affiliate/post', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({affiliate_url: url, product_name: '', contents, subreddits, delay_min: delayMin, delay_max: delayMax})
+            });
+            const data = await resp.json();
+            if (data.error) { alert('Lỗi: ' + data.error); btn.disabled = false; btn.textContent = '🚀 Rải Ngay'; }
+        } catch (e) {
+            alert('Lỗi: ' + e.message);
+            btn.disabled = false;
+            btn.textContent = '🚀 Rải Ngay';
+        }
+    }
+
+    function updateAffiliateStatus(data) {
+        const platforms = data.platforms || {};
+        const errors = data.errors || {};
+        const statusMap = {
+            pending: {label: '⏳ Chờ...', color: 'var(--text2)'},
+            posting: {label: '📤 Đang post...', color: 'var(--warn)'},
+            success: {label: '✅ Thành công', color: 'var(--success)'},
+            failed: {label: '❌ Thất bại', color: 'var(--accent)'},
+        };
+        for (const [platform, status] of Object.entries(platforms)) {
+            const el = document.getElementById(`aff-status-${platform}`);
+            if (el) {
+                const s = statusMap[status] || {label: status, color: 'var(--text2)'};
+                el.textContent = errors[platform] ? `❌ ${errors[platform].slice(0, 60)}` : s.label;
+                el.style.color = s.color;
+            }
+        }
+        if (!data.running) {
+            const btn = document.getElementById('affPostBtn');
+            if (btn) { btn.disabled = false; btn.textContent = '🚀 Rải Ngay'; }
+        }
     }
 
     // ── Init ───────────────────────────────────────────────────────
